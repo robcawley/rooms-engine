@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Rooms engine: host page example</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#0b0c0e;color:#e6e2dc;font:13px/1.5 ui-monospace,Menlo,monospace}
+  header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid #262a30}
+  button,select{padding:7px 12px;border:1px solid #3a3f46;border-radius:2px;background:none;color:inherit;font:inherit;cursor:pointer}
+  #rooms{height:calc(100vh - 140px);min-height:520px}
+  #log{height:80px;overflow:auto;margin:0;padding:8px 16px;border-top:1px solid #262a30;color:#8f949b;white-space:pre-wrap}
+</style>
+<!-- An example host: a record page that embeds the rooms and drives them from its own controls. -->
+<header>
+  <b>Host page</b>
+  <button id="play">Play</button>
+  <button id="pause">Pause</button>
+  <select id="song" aria-label="Song"></select>
+  <button id="state">State</button>
+</header>
+<div id="rooms"></div>
+<pre id="log"></pre>
+<script src="embed.js"></script>
+<script>
+  const log = t => { const el = document.getElementById('log'); el.textContent += t + '\n'; el.scrollTop = 1e9; };
+  const rooms = RoomTone.embed(document.getElementById('rooms'), {
+    // album: 'https://your-storage.example/albums/room-tone/album.json',
+    onEvent(e) {
+      log(`${e.type}${e.song ? ' · ' + e.song.title : ''}${e.type === 'state' ? ` · ${e.position}/${e.duration}s · playing ${e.playing}` : ''}${e.message ? ' · ' + e.message : ''}`);
+      if (e.type === 'ready') {
+        document.getElementById('song').replaceChildren(new Option('Choose a song…', ''),
+          ...e.album.songs.map(s => new Option(`${s.track}. ${s.title}`, s.key)));
+      }
+    },
+  });
+  document.getElementById('play').onclick = () => rooms.play();
+  document.getElementById('pause').onclick = () => rooms.pause();
+  document.getElementById('state').onclick = () => rooms.state();
+  document.getElementById('song').onchange = e => e.target.value && rooms.go(e.target.value);
+</script>

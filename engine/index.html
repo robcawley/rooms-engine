@@ -1,0 +1,2240 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Rooms</title>
+<meta name="theme-color" content="#0b0c0e">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Old+Standard+TT:ital,wght@0,400;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Room Tone player. The room is a 9:16 stage; notes sit beside it on wide screens and below it in portrait. */
+:root{
+  --ink:#0b0c0e; --panel:#111316; --line:#262a30; --edge:#33383f; --bone:#e6e2dc; --dust:#8f949b; --text:#c6c3be;
+  --blood:#a3191e; --iris:#4f86b3;
+  --display:"Old Standard TT","Iowan Old Style",Georgia,serif;
+  --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --sat:env(safe-area-inset-top,0px); --sab:env(safe-area-inset-bottom,0px);
+  --sal:env(safe-area-inset-left,0px); --sar:env(safe-area-inset-right,0px);
+  --padT:max(20px,var(--sat)); --padB:max(20px,var(--sab)); --padL:max(16px,var(--sal)); --padR:max(16px,var(--sar));
+  color-scheme:dark;
+}
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+html{background:var(--ink);-webkit-text-size-adjust:100%;text-size-adjust:100%}
+body{margin:0;min-height:100vh;min-height:100svh;padding:var(--padT) var(--padR) var(--padB) var(--padL);
+  background:var(--ink);color:var(--bone);font:13px/1.55 var(--mono);-webkit-tap-highlight-color:transparent}
+p{margin:0;color:var(--text);max-width:62ch}
+svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+
+/* layout */
+.wrap{display:grid;grid-template:"stage nav" auto "stage aside" auto "stage transport" 1fr / auto minmax(0,340px);
+  column-gap:clamp(24px,4vw,48px);row-gap:22px;justify-content:center;align-items:start;max-width:1200px;margin:0 auto}
+.stage{grid-area:stage;position:sticky;top:var(--padT);container-type:inline-size;overflow:hidden;border-radius:2px;
+  --h:min(calc(100vh - var(--padT) - var(--padB)),960px);--h:min(calc(100svh - var(--padT) - var(--padB)),960px);
+  height:var(--h);width:calc(var(--h) * 9 / 16);background:#15171a;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+canvas{display:block;width:100%;height:100%;touch-action:manipulation;cursor:crosshair;user-select:none;-webkit-user-select:none;-webkit-touch-callout:none}
+
+/* over the room: title card, enter button, stare line */
+.enter{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:12px;padding:0 8% 9%;
+  background:linear-gradient(to top,rgba(11,12,14,.92),rgba(11,12,14,.25) 55%,rgba(11,12,14,.55));pointer-events:none;transition:opacity .7s ease}
+.enter.gone{opacity:0}
+.card{margin-bottom:auto;padding-top:22%;text-align:center;text-shadow:0 2px 18px #000}
+.card-n{font-size:10px;letter-spacing:.2em;text-transform:uppercase;color:var(--dust)}
+.card-t{margin-top:8px;font:clamp(26px,6.5cqw,44px)/1.05 var(--display);text-wrap:balance}
+.enter button{pointer-events:auto;min-height:44px;padding:10px 22px;border:1px solid rgba(230,226,220,.35);border-radius:999px;
+  background:rgba(11,12,14,.6);color:var(--bone);font:italic 22px var(--display);cursor:pointer}
+.enter button:hover,.enter button:focus-visible{border-color:var(--bone);outline:none}
+.enter button:disabled{opacity:.6;cursor:progress}
+.enter small{color:var(--dust);letter-spacing:.08em;text-transform:uppercase;font-size:10px}
+.bar{width:min(220px,60%);height:2px;border-radius:2px;overflow:hidden;background:rgba(230,226,220,.15)}
+.bar i{display:block;height:100%;width:0;background:var(--bone);transition:width .2s}
+.whisper{position:absolute;inset:8% 0 auto;text-align:center;font:italic 20px var(--display);text-shadow:0 2px 12px #000;
+  opacity:0;transition:opacity 2.5s ease;pointer-events:none}
+.whisper.on{opacity:.85}
+
+/* song picker: previous · current track (opens the tracklist) · next */
+.picker{grid-area:nav;position:relative;display:grid;grid-template-columns:44px minmax(0,1fr) 44px;gap:6px;min-width:0;padding-top:4px}
+.picker>button{all:unset;box-sizing:border-box;display:flex;align-items:center;height:48px;border:1px solid var(--edge);border-radius:3px;
+  color:var(--bone);cursor:pointer;transition:border-color .2s,background .2s}
+.picker>button:hover{border-color:#5a606a;background:rgba(230,226,220,.03)}
+.picker>button:focus-visible{outline:1px solid var(--bone);outline-offset:2px}
+.picker>button:disabled{opacity:.3;cursor:default}
+.step{justify-content:center}
+.pick{gap:12px;padding:0 16px;min-width:0}
+.pk-n,.pk-l{font-size:11px;letter-spacing:.08em;color:var(--dust);font-variant-numeric:tabular-nums}
+.pk-l{font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.pk-t{flex:1;min-width:0;font:italic 19px var(--display);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pick svg{transition:transform .25s}
+.pick[aria-expanded="true"] svg{transform:rotate(180deg)}
+
+/* tracklist: a drop-down on wide screens, a bottom sheet on phones */
+.tl{position:absolute;inset:calc(100% + 8px) 0 auto;z-index:30;max-height:min(72vh,620px);overflow:auto;overscroll-behavior:contain;
+  background:var(--panel);border:1px solid var(--edge);border-radius:4px;box-shadow:0 24px 70px rgba(0,0,0,.7);
+  opacity:0;visibility:hidden;transform:translateY(-6px);transition:opacity .2s,transform .2s,visibility 0s .2s}
+.tl.open{opacity:1;visibility:visible;transform:none;transition:opacity .2s,transform .2s}
+.tl-head{position:sticky;top:0;z-index:1;display:flex;align-items:baseline;gap:10px;padding:16px 18px 10px;background:var(--panel);border-bottom:1px solid var(--line)}
+.tl-head b{font:22px var(--display)}
+.tl-head span{flex:1;font:italic 15px var(--display);color:var(--dust)}
+.tl-head button{all:unset;display:none;place-items:center;width:36px;height:36px;border-radius:50%;color:var(--dust);cursor:pointer}
+.tl ol{list-style:none;margin:0;padding:6px}
+.tl li button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:40px 26px minmax(0,1fr) auto;gap:12px;align-items:center;
+  width:100%;padding:8px 10px;border-radius:3px;cursor:pointer;transition:background .15s}
+.tl li button:hover,.tl li button:focus-visible{background:rgba(230,226,220,.06);outline:none}
+.tl li button[aria-current="true"]{background:rgba(79,134,179,.12)}
+.th{width:40px;height:56px;border-radius:2px;background:#1b1e22 center/cover no-repeat;box-shadow:inset 0 0 0 1px rgba(255,255,255,.06)}
+.tl .n,.tl .d{font-size:11px;color:var(--dust);font-variant-numeric:tabular-nums}
+.tl .n{text-align:right}
+.tl .t{min-width:0}
+.tl .t b{display:block;font:18px/1.2 var(--display);color:var(--bone)}
+.tl .t small{display:block;margin-top:2px;font-size:11px;color:var(--dust);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px}
+.eq i{width:2px;background:var(--iris);animation:eq 1s ease-in-out infinite}
+.eq i:nth-child(2){animation-delay:-.3s}
+.eq i:nth-child(3){animation-delay:-.6s}
+@keyframes eq{0%,100%{height:3px}50%{height:12px}}
+.paused .eq i{animation-play-state:paused}
+.scrim{position:fixed;inset:0;z-index:29;background:rgba(0,0,0,.55);opacity:0;visibility:hidden;transition:opacity .25s,visibility 0s .25s}
+.scrim.open{opacity:1;visibility:visible;transition:opacity .25s}
+
+/* notes and mix */
+aside{grid-area:aside;display:flex;flex-direction:column;gap:22px;min-width:0}
+.info,.mix{display:flex;flex-direction:column;gap:18px;min-width:0}
+.eyebrow{font-size:10px;letter-spacing:.14em;text-transform:uppercase;color:var(--dust)}
+h1{margin:4px 0 0;font:42px/1.02 var(--display);text-wrap:balance}
+.by{font:italic 18px var(--display);color:var(--dust)}
+.how{display:flex;flex-direction:column;gap:6px;font-size:12px;color:var(--text)}
+.how b{color:var(--bone);font-weight:500}
+.stems{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.stems li{display:grid;grid-template-columns:minmax(0,1fr) minmax(90px,42%);align-items:center;gap:12px;border-bottom:1px solid var(--line)}
+.stems button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:18px 1fr auto;gap:10px;align-items:center;width:100%;min-width:0;padding:9px 2px;cursor:pointer}
+.stems button:focus-visible{outline:1px solid var(--bone);outline-offset:2px}
+.stems input{width:100%;margin:0;accent-color:var(--iris)}
+.name{min-width:0;overflow-wrap:anywhere}
+.dot{width:10px;height:10px;border-radius:50%;border:1px solid var(--dust);transition:background .3s,border-color .3s}
+.on .dot{background:var(--iris);border-color:#9cc4e4;box-shadow:0 0 8px rgba(79,134,179,.7)}
+.on .name{color:#fff}
+.meter{position:relative;width:54px;height:3px;border-radius:2px;overflow:hidden;background:var(--line)}
+.meter i{position:absolute;inset:0 auto 0 0;width:0;background:var(--iris)}
+.row{display:flex;flex-wrap:wrap;gap:10px}
+.row button,.scrub button{padding:7px 12px;border:1px solid #3a3f46;border-radius:2px;background:none;color:var(--bone);
+  font:11px var(--mono);letter-spacing:.06em;text-transform:uppercase;cursor:pointer}
+.row button:hover,.row button:focus-visible,.scrub button:hover,.scrub button:focus-visible{border-color:var(--bone);outline:none}
+
+/* transport */
+.transport{grid-area:transport;position:sticky;bottom:0;z-index:3;padding:12px 0 max(4px,var(--sab));margin-bottom:calc(-1 * var(--padB));
+  background:linear-gradient(to bottom,rgba(11,12,14,0),var(--ink) 14px)}
+.scrub{display:flex;align-items:center;gap:8px}
+.scrub button{flex:none;width:40px;padding:6px 0;letter-spacing:0;font-variant-numeric:tabular-nums}
+.scrub .play{display:grid;place-items:center;width:44px;border-color:#5a606a}
+.play svg{width:14px;height:14px;fill:currentColor;stroke:none}
+.scrub input{flex:1;min-width:0;height:22px;margin:0;accent-color:var(--blood);cursor:pointer}
+.clock{flex:none;min-width:9ch;text-align:right;font-size:11px;color:var(--dust);font-variant-numeric:tabular-nums}
+
+/* touch screens: 44 px targets */
+@media (pointer:coarse){
+  .stems button{padding:12px 2px}
+  .row button{padding:11px 14px}
+  .scrub button{width:44px;height:40px}
+  .scrub input,.stems input{height:36px}
+}
+/* portrait phones and tablets: picker, room, notes; the transport is a bar above the home indicator */
+@media (orientation:portrait) and (max-width:1024px){
+  body{--padT:max(12px,var(--sat));--padL:max(12px,var(--sal));--padR:max(12px,var(--sar));--tbar:64px;
+    padding-bottom:calc(var(--tbar) + max(12px,var(--sab)) + 16px)}
+  .wrap{grid-template:"nav" "stage" "aside" / minmax(0,1fr);row-gap:14px;justify-content:stretch}
+  .picker{padding-top:0}
+  .stage{position:relative;top:auto;justify-self:center;
+    --h:min(calc(100vh - var(--padT) - 76px - var(--tbar) - max(12px,var(--sab))),calc((100vw - var(--padL) - var(--padR)) * 16 / 9));
+    --h:min(calc(100svh - var(--padT) - 76px - var(--tbar) - max(12px,var(--sab))),calc((100vw - var(--padL) - var(--padR)) * 16 / 9))}
+  aside{width:100%;max-width:760px;justify-self:center;padding-top:6px}
+  .transport{position:fixed;inset:auto 0 0;z-index:5;margin:0;padding:10px max(12px,var(--sar)) max(10px,var(--sab)) max(12px,var(--sal));
+    background:rgba(11,12,14,.88);-webkit-backdrop-filter:blur(14px);backdrop-filter:blur(14px);border-top:1px solid var(--line)}
+  .scrub{max-width:760px;margin:0 auto}
+  h1{font-size:32px}
+}
+@media (orientation:portrait) and (min-width:700px) and (max-width:1024px){
+  aside{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:32px;align-items:start}
+  h1{font-size:38px}
+}
+/* phones in landscape: the room fills the height, the notes scroll beside it */
+@media (orientation:landscape) and (max-height:540px){
+  body{--padT:max(8px,var(--sat));--padB:max(8px,var(--sab));font-size:12px}
+  .wrap{grid-template-columns:auto minmax(0,1fr);column-gap:20px;row-gap:12px;max-width:none}
+  .picker{padding-top:0}
+  .picker>button{height:42px}
+  aside{gap:14px}
+  h1{font-size:26px}
+  .by{font-size:15px}
+  .how{display:none}
+  .enter button{font-size:18px;padding:8px 18px}
+}
+/* phones: the tracklist slides up as a sheet */
+@media (max-width:760px),(max-height:540px){
+  .tl{position:fixed;inset:auto 0 0;max-height:min(80svh,680px);padding:0 var(--sar) max(10px,var(--sab)) var(--sal);
+    border-width:1px 0 0;border-radius:14px 14px 0 0;opacity:1;transform:translateY(100%);
+    transition:transform .32s cubic-bezier(.2,.8,.2,1),visibility 0s .32s}
+  .tl.open{transform:none;transition:transform .32s cubic-bezier(.2,.8,.2,1)}
+  .tl-head{padding-top:22px}
+  .tl-head::before{content:"";position:absolute;top:8px;left:50%;width:36px;height:4px;margin-left:-18px;border-radius:2px;background:#3a3f46}
+  .tl-head button{display:grid}
+  .tl li button{padding:10px}
+}
+@media (orientation:landscape) and (max-height:540px){.tl{left:auto;width:min(460px,100%);border-left-width:1px;border-radius:14px 0 0 0}}
+@media (max-width:380px){h1{font-size:28px}.clock{min-width:0}}
+@media (max-width:360px){.pk-l{display:none}}
+/* way-in screen */
+.lobby{position:fixed;inset:0;z-index:40;display:grid;grid-template-columns:auto minmax(0,400px);column-gap:clamp(28px,5vw,72px);
+  justify-content:center;padding:var(--padT) var(--padR) var(--padB) var(--padL);overflow:auto;overscroll-behavior:contain;
+  background:var(--ink);transition:opacity .7s ease}
+.lobby.gone{opacity:0;pointer-events:none}
+.lobby-room{position:sticky;top:0;--h:min(calc(100svh - var(--padT) - var(--padB)),960px);height:var(--h);width:calc(var(--h) * 9 / 16);
+  overflow:hidden;border-radius:2px;background:#0d0e10;box-shadow:0 30px 80px rgba(0,0,0,.6)}
+.lobby-room canvas{cursor:default}
+.lobby-room canvas.on-eye{cursor:pointer}
+.begin{position:absolute;left:50%;top:60%;transform:translateX(-50%);min-height:44px;padding:10px 22px;white-space:nowrap;
+  border:1px solid rgba(230,226,220,.4);border-radius:999px;background:rgba(11,12,14,.55);color:var(--bone);
+  font:italic 20px var(--display);cursor:pointer;animation:beckon 2.6s ease-in-out infinite}
+.begin::after{content:"sound on";position:absolute;top:calc(100% + 10px);left:0;right:0;text-align:center;
+  font:10px var(--mono);font-style:normal;letter-spacing:.16em;text-transform:uppercase;color:var(--bone);opacity:.7;text-shadow:0 1px 8px #000,0 0 3px #000}
+.begin:hover,.begin:focus-visible{border-color:var(--bone);outline:none;animation:none}
+@keyframes beckon{0%,100%{box-shadow:0 0 0 0 rgba(130,175,225,0)}50%{box-shadow:0 0 0 8px rgba(130,175,225,.12)}}
+.lobby-room .whisper{inset:auto 0 9%}
+.lobby-text{display:flex;flex-direction:column;gap:22px;align-self:center;padding:24px 0}
+.lobby h2{margin:4px 0 0;font:54px/1 var(--display);letter-spacing:-.01em}
+.lede{font:italic 19px/1.4 var(--display);color:var(--bone)}
+.doors{display:flex;flex-direction:column;gap:6px}
+.doors ol{list-style:none;margin:0;padding:0;border-top:1px solid var(--line)}
+.doors li{border-bottom:1px solid var(--line)}
+.doors button{all:unset;box-sizing:border-box;display:grid;grid-template-columns:28px minmax(0,1fr) auto;gap:10px;align-items:baseline;
+  width:100%;min-height:40px;padding:9px 4px}
+.doors button{cursor:pointer;transition:background .15s,padding .2s}
+.doors button:hover,.doors button:focus-visible{background:rgba(79,134,179,.1);padding-left:10px;outline:none}
+.doors .n,.doors .d{font-size:11px;color:var(--dust);font-variant-numeric:tabular-nums}
+.doors .t{font:19px/1.2 var(--display);color:var(--bone)}
+.doors .more{margin-top:10px;font:italic 15px var(--display);color:var(--dust)}
+.doors small{color:var(--dust);font-size:10px;letter-spacing:.12em;text-transform:uppercase}
+.tl-head .how-btn{all:unset;display:block;font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--dust);cursor:pointer;padding:6px 2px}
+.tl-head .how-btn:hover,.tl-head .how-btn:focus-visible{color:var(--bone)}
+@media (pointer:coarse){.doors button{min-height:46px}}
+/* way-in screen in portrait: the room fills the screen, the text scrolls over it */
+@media (orientation:portrait) and (max-width:1024px){
+  .lobby{display:block;padding:0}
+  .lobby-room{position:fixed;inset:0;width:auto;height:auto;border-radius:0;box-shadow:none}
+  .lobby-text{position:relative;max-width:560px;margin:46svh auto 0;padding:56px max(20px,var(--sar)) calc(28px + var(--sab)) max(20px,var(--sal));
+    background:linear-gradient(to bottom,rgba(11,12,14,0),rgba(11,12,14,.88) 80px,rgba(11,12,14,.95))}
+  .lobby h2{font-size:44px}
+}
+@media (orientation:landscape) and (max-height:540px){.lobby h2{font-size:36px}.lobby-text{gap:16px}}
+@media (prefers-reduced-motion:reduce){.begin{animation:none}.eq i{animation:none;height:8px}.tl,.scrim,.enter,.lobby{transition:none!important}}
+</style>
+
+<section class="lobby" id="lobby" aria-label="The way in" hidden>
+  <div class="lobby-room"><canvas id="lobbyCanvas" aria-label="An empty room. A large eye hangs in the dark, watching you."></canvas>
+    <div class="whisper" id="lobbyWhisper"></div>
+    <button class="begin" id="beginBtn">Tap the eye to begin</button></div>
+  <div class="lobby-text">
+    <div>
+      <div class="eyebrow" id="lbArtist"></div>
+      <h2 id="lbTitle"></h2>
+    </div>
+    <p class="lede" id="lbLede"></p>
+    <div class="doors">
+      <small>Or choose a song</small>
+      <ol id="doors"></ol>
+      <p class="more" id="moreRooms"></p>
+    </div>
+  </div>
+</section>
+
+<div class="wrap" id="wrap">
+  <div class="stage" id="stage">
+    <canvas id="c"></canvas>
+    <div class="whisper" id="whisper"></div>
+    <div class="enter" id="enter">
+      <div class="card" aria-hidden="true"><div class="card-n" id="cardNum"></div><div class="card-t" id="cardTitle"></div></div>
+      <button id="enterBtn" disabled>Loading the room…</button>
+      <div class="bar" aria-hidden="true"><i id="loadBar"></i></div>
+      <small id="enterNote">sound on</small>
+    </div>
+  </div>
+
+  <nav class="picker" aria-label="Songs">
+    <button class="step" id="prevSong" aria-label="Previous song"><svg viewBox="0 0 16 16"><path d="M10 3 5 8l5 5"/></svg></button>
+    <button class="pick" id="pickBtn" aria-haspopup="true" aria-expanded="false" aria-controls="tracklist">
+      <span class="pk-n" id="pkNum"></span><span class="pk-t" id="pkTitle"></span><span class="pk-l">Tracks</span>
+      <svg viewBox="0 0 16 16"><path d="m4 6 4 4 4-4"/></svg></button>
+    <button class="step" id="nextSong" aria-label="Next song"><svg viewBox="0 0 16 16"><path d="m6 3 5 5-5 5"/></svg></button>
+    <div class="tl" id="tracklist" role="dialog" aria-label="Tracklist" aria-hidden="true" inert>
+      <div class="tl-head"><b id="tlAlbum"></b><span id="tlArtist"></span><button class="how-btn" id="howBtn">How it works</button>
+        <button id="tlClose" aria-label="Close tracklist"><svg viewBox="0 0 16 16"><path d="m4 4 8 8M12 4l-8 8"/></svg></button></div>
+      <ol id="tlList"></ol>
+    </div>
+  </nav>
+  <div class="scrim" id="scrim"></div>
+
+  <aside>
+    <div class="info">
+      <div>
+        <div class="eyebrow" id="eyebrow"></div>
+        <h1 id="songTitle"></h1>
+        <div class="by" id="byArtist"></div>
+      </div>
+      <p id="blurb"></p>
+      <div class="how" id="how"></div>
+    </div>
+    <div class="mix">
+      <ul class="stems" id="stems"></ul>
+      <div class="row">
+        <button id="wakeAll">Wake all</button>
+        <button id="sleepAll">Sleep all</button>
+        <button id="restart">From the top</button>
+      </div>
+    </div>
+  </aside>
+
+  <div class="transport">
+    <div class="scrub">
+      <button class="play" id="playBtn" aria-label="Play"><svg viewBox="0 0 14 14"><path id="playIcon"/></svg></button>
+      <button id="back10" aria-label="Back 10 seconds">&minus;10</button>
+      <input id="scrub" type="range" min="0" max="1000" value="0" aria-label="Position in the song">
+      <button id="fwd10" aria-label="Forward 10 seconds">+10</button>
+      <span class="clock" id="clock"></span>
+    </div>
+  </div>
+</div>
+
+<script type="module">
+/* Rooms engine (made for Room Tone): one room per song; every eye is one stem.
+   Sections: helpers · album · sound · eyes · rooms (figure, fader, sequencer) · fader-room effects · way-in screen · host messages · app.
+   The album comes from album.json (?album=<url>); each song folder holds song.json (layout, stems, MP3 frame index),
+   its MP3s and images; shared images are in kit/. Rooms draw in 1080 × 1920 art units, scaled by K. */
+
+const ENGINE_VERSION = '1.0.0';
+
+// ——— helpers ——————————————————————————————————————————————————————————————————————————————————————————————
+
+const ui = Object.fromEntries([...document.querySelectorAll('[id]')].map(el => [el.id, el]));
+const TAU = Math.PI * 2;
+const clamp = (v, lo = 0, hi = 1) => Math.min(hi, Math.max(lo, v));
+const ease = (from, to, rate) => from + (to - from) * rate;   // one frame of a smooth approach
+const pad2 = n => String(n).padStart(2, '0');
+const mmss = s => `${Math.floor(s / 60)}:${pad2(Math.floor(s % 60))}`;
+const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function loadImage(src) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';   // art may live on another host; canvases read its pixels
+    img.onload = () => resolve(img);
+    img.onerror = () => reject(new Error(`Couldn't load ${src}`));
+    img.src = src;
+  });
+}
+async function fetchJSON(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`${url}: ${res.status}`);
+  return res.json();
+}
+function makeCanvas(w, h = w) {
+  const c = document.createElement('canvas');
+  c.width = w; c.height = h;
+  return [c, c.getContext('2d')];
+}
+const memo = fn => { const seen = new Map(); return key => seen.has(key) ? seen.get(key) : seen.set(key, fn(key)).get(key); };
+
+// ——— album ————————————————————————————————————————————————————————————————————————————————————————————————
+// The album is data: album.json (format roomtone-album-v1) lists the songs, and each song folder holds its song.json.
+// ?album=<url> picks the album (default album.json beside this page). Song folders resolve against the album's "media" URL,
+// so the stems can live on any host. Thumbs written "kit:<file>" come from the shared kit.
+
+const params = new URLSearchParams(location.search);
+const ALBUM_URL = new URL(params.get('album') || 'album.json', location.href).href;
+let KIT = new URL('kit/', location.href).href;
+let ALBUM, SONGS, ORDER, SHUT;   // SONGS: key → { track, title, dur, mode, base, thumb, blurb, stare }
+
+async function loadAlbum() {
+  const album = await fetchJSON(ALBUM_URL);
+  if (album.format !== 'roomtone-album-v1') throw new Error(`${ALBUM_URL}: expected format roomtone-album-v1`);
+  if (album.kit) KIT = new URL(album.kit.replace(/\/?$/, '/'), ALBUM_URL).href;
+  if (params.get('kit')) KIT = new URL(params.get('kit').replace(/\/?$/, '/'), location.href).href;
+  const media = new URL((album.media ?? './').replace(/\/?$/, '/'), ALBUM_URL);
+  const asset = path => path.startsWith('kit:') ? KIT + path.slice(4) : new URL(path, media).href;
+  SONGS = Object.fromEntries(album.songs.map(s => [s.key, {
+    ...s, mode: s.mode === 'figures' ? undefined : s.mode, stare: s.stare?.length ? s.stare : ['…'],
+    base: new URL(s.folder.replace(/\/?$/, '/'), media).href, thumb: s.thumb ? asset(s.thumb) : '' }]));
+  ORDER = Object.keys(SONGS).sort((a, b) => SONGS[a].track - SONGS[b].track);
+  SHUT = (album.coming ?? []).map(c => [c.track, c.title]);   // songs without rooms yet (counted on the way-in screen)
+  ALBUM = album;
+}
+// A song folder by album key, or by path relative to the current song (for figures borrowed from another song).
+const songBase = (key, from) => SONGS[key]?.base ?? new URL(key.replace(/\/?$/, '/'), from).href;
+
+// ——— sound ————————————————————————————————————————————————————————————————————————————————————————————————
+// One audio context for the visit, at the device's own sample rate (forcing another rate crackles on some phones).
+
+const MIX = .8;   // a part's level in the record; the top of a fader is +3 dB
+const ON = .02;   // below this a part is asleep
+const gainFor = v => v < ON ? 0 : Math.min(1.41, (v / MIX) ** 1.7);
+
+let context;
+function audioContext() {
+  if (!context) {
+    if (navigator.audioSession) navigator.audioSession.type = 'playback';   // iOS: a proper music session
+    context = new (window.AudioContext || window.webkitAudioContext)();
+  }
+  return context;
+}
+
+// Streaming: stems are read as MP3 byte ranges of a few seconds (song.json's frame index), decoded a chunk at a time
+// around the playhead, and crossfaded at the joins.
+const FRAME = 1152;   // samples per MP3 frame
+const CROSSFADE = .01;   // seconds
+
+// Measures how many samples this browser's decoder drops at the start of a headerless range, using a tiny MP3.
+const DECODER_PROBE = {"mp3": "SUQzBAAAAAAAI1RTU0UAAAAPAAADTGF2ZjYyLjEyLjEwMQAAAAAAAAAAAAAA//tQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWGluZwAAAA8AAAAJAAAIVwBwcHBwcHBwcHBwcIODg4ODg4ODg4ODkpKSkpKSkpKSkpKioqKioqKioqKiorKysrKysrKysrKywcHBwcHBwcHBwcHR0dHR0dHR0dHR0efn5+fn5+fn5+fn//////////////8AAAAATGF2YzYyLjI4AAAAAAAAAAAAAAAAJAPMAAAAAAAACFd4nA4DAAAAAAAAAAAAAAAAAAAAAP/7wGQAAALcEVfVGKAIAAANIKAAARE0q1f5zgRAAAA0gwAAAAAAkCv2u3u7u7v3GHg4DAYDJ230JU4mHwDA4fD8QAhrB8/lDlHn+UdoD/AjtAf4EAAIAgCAPg+D4Pg4CAIAgCAPg+D4Pg4CAIAgCAPg+D4PgQEAxDAPh/KBjv6DrFAxALaAADArRAKBAMAAFKi7wUBZZW6gyYbFhhgc1jBbg8wqSzKwuUCMxf8ABw4CUAwLmChKAhA+wwENIfQ0QAlDhkYsR59AXcCwoNEAMHAJ0WutZKBBr/L0f/ukzpnURf2rzLLv///DNaNRqrS////////xmtTU1Wlpf4iCoKiI9/rBURBUFREqD+mTCaIDQAAAP/98FgWArpaami6KEkchbtImWtJe0fRJJalJVFIc4AfiySrYgATaQIwAXAGmzI1BhVNi3UApLEFdBS8mVDnpiDaNShN/5n//Gs3E1AjkRZdZyhsAfKUIsAXAAAAkCxH8EZHECaN0CaHJKEQClUqgGYkEKkNr63/+VVuxnNGqXS0J8YARlKEaQTgCgRhZcoKxJE59UZhjxDyilWGhm5CW2gW19Xnf3WeE0aERRhqrlM0ArrgJ1AvAAAAgwmSqZAKxJE5gIVUOU4uEWVjP7lLX6itr6bvP/cFGMsqgURrbssAVtuE+gfgAfgWWHKAsSSGcEvMMS4uaWVNodtPqxJ3ab7PO/+oNBDQKAbdpLcHqqgC+twnlDcAAAAXQLq5keWtKBOyj0MN4+UWVrRW/BrtRm19vvP/ckCiyoZH6lfBUAzbgJ1AvACiQ1VgScrOkxmclnhRtH3idT6eWfgOApTl9Jzv/qCzGWRQOIV8B6tUAvscHwwnAAAAU6TNT2L6rDF4ndSKFFMjkJ1vpDbiceq5fX7z/3BBsL6mkrqZmLAFdTA9iD4AaoyVMoRAbtLGh1XQiQSPgnWhSa3E6CrqYeodYHRyBy5OBh4kA//swZOiB8WwRV39mIAgAAA0g4AABBdBHQeBjgmAAADSAAAAEzsgI0QnAAAAQILFSWGBq3F2mSiwhELk/ZRK1PZL2BvBQ5fX///OIGyK4sAQ/SBgGAZ1QD2APgAHoYYUQHU/iXGKCPYgV/FE1OES924hd19z//8ImbmjJByy2B4IAvsgJ0AfAAAAGwS8PgEmT4NI1AI4iIifpokS2//sgZPaB8XsQ0PgP4LoAAA0gAAABBahHReADYCAAADSAAAAEaP2sO4Er193//85Qb8YokSOwGZ/VgAAAC+Z555tiWGZyWjUrCAAAgIGAQQmKp6HyAAGNgxGFwFAoBJTWciMWNNEXwj44CxzAcMzFMOzjE3DFwSiIKV1pjwuJw/nr///7IGT3AfF7EdJ4GNi6AAANIAAAAQXYR0ngQ2IoAAA0gAAABP/ww/PPv//4YYfnnnqnpy0ARgZnSKRJI5WKAYVY38wuF4uEwMJDTExUvMW2YC9oKIzVLZrQhBr7KjPKkWEwEDOfE2jHxEaiEsS+Sqcd+ArSdQGTourMY6AaBqio/tP/+yBk9oHxdhJS+BDYigAADSAAAAEFzEdJ4GNiKAAANIAAAATgiq/r+1ZTYzX4+79qAJiQE5TWpTS/+Wuvwy9/4vFN47q0tam////tww7EUa+/8vlWOOO8aX////4pvOMP5FHfjdutTSrHHHeNL//////OZ24xGJZD8vt3q+WVbf/v//sgZPaB8XcR0ngb0MoAAA0gAAABBWRDR+Bug6gAADSAAAAEHHWX///////nSUliX558zzpKSxTg9WCoiPRL/ygYTEFNRTMuMTAwVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7IGT4gfGHEVH4GNi6AAANIAAAAQV4RUfgP2LoAAA0gAAABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVX/+0Bk+QHxfRFR+A/YugAADSAAAAELyIMztd6AKAAANIKAAARVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVf/7UGT7AAYwVtf+byQgAAANIMAAAAAAAaQcAAAgAAA0g4AABFVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVVU=", "first": 253, "skip": 1105, "samples": 8820};
+const base64Bytes = value => Uint8Array.from(atob(value), c => c.charCodeAt(0));
+let decoderDrop;
+function measureDecoderDrop() {
+  return decoderDrop ??= (async () => {
+    const bytes = base64Bytes(DECODER_PROBE.mp3), ctx = new OfflineAudioContext(2, 1, 44100), { first, skip } = DECODER_PROBE;
+    const whole = (await ctx.decodeAudioData(bytes.slice().buffer)).getChannelData(0);
+    const bare = (await ctx.decodeAudioData(bytes.slice(first).buffer)).getChannelData(0);
+    let best = { error: Infinity, lag: skip }, energy = 0;
+    for (let i = 800; i < 2400; i += 2) energy += whole[i] ** 2;
+    for (let lag = 0; lag <= 3000; lag++) {
+      let error = 0;
+      for (let i = 800; i < 2400 && error < best.error; i += 2) error += (whole[i] - bare[i + lag]) ** 2;
+      if (error < best.error) best = { error, lag };
+    }
+    return best.error < energy * 1e-3 ? skip - best.lag : 0;   // unclear: assume none
+  })().catch(() => 0);
+}
+
+// One song's stems as chunks: fetched, decoded and released as the playhead moves.
+class StemWindows {
+  constructor(urls, stream, signal, onProgress) {
+    if (stream?.format !== 'mp3-ranges-v1') throw new Error('The song needs its MP3 frame index');
+    Object.assign(this, { rate: stream.rate, step: stream.window_seconds, guard: stream.guard_seconds, onProgress });
+    this.duration = stream.stems[0].samples / this.rate;
+    this.decoder = new OfflineAudioContext(2, 1, audioContext().sampleRate);
+    this.windows = new Map();
+    this.queue = [];
+    this.working = 0;
+    this.peakBytes = 0;
+    this.stems = urls.map(url => {
+      const data = stream.stems.find(s => url.endsWith(`/${s.audio}`));
+      if (!data) throw new Error(`No MP3 frame index for ${url}`);
+      const sizes = new DataView(base64Bytes(data.frame_bytes).buffer), offsets = [data.first_byte];
+      for (let k = 0; k < sizes.byteLength; k += 2) offsets.push(offsets.at(-1) + sizes.getUint16(k, true));
+      return { ...data, url, offsets, whole: null };
+    });
+    this.onAbort = () => this.close();
+    this.signal = signal;
+    signal.addEventListener('abort', this.onAbort, { once: true });
+  }
+  async open() {
+    this.drop = await measureDecoderDrop();
+    await this.ensure(0);
+    return this;
+  }
+  index(seconds) { return Math.floor(Math.max(0, seconds) / this.step); }
+
+  // A byte range of a stem; a server without range support sends the whole file, which is kept compressed.
+  async read(stem, from, to, signal) {
+    if (stem.whole) return stem.whole.slice(from, to);
+    const res = await fetch(stem.url, { signal, headers: { Range: `bytes=${from}-${to - 1}` } });
+    if (!res.ok) throw new Error(`${stem.url}: ${res.status}`);
+    const data = await res.arrayBuffer();
+    if (res.status === 206) return data;
+    stem.whole = data;
+    return data.slice(from, to);
+  }
+
+  // The chunk at index × step seconds, for every stem (two decodes at a time).
+  ensure(index) {
+    if (this.closed) return Promise.reject(new DOMException('Room closed', 'AbortError'));
+    if (this.windows.has(index)) return this.windows.get(index).promise;
+    const entry = { index, buffers: [], origins: [], abort: new AbortController(), ready: false };
+    this.windows.set(index, entry);
+    entry.promise = Promise.all(this.stems.map((stem, i) => new Promise((resolve, reject) => {
+      this.queue.push({ entry, stem, i, resolve, reject });
+      this.pump();
+    }))).then(() => { entry.ready = true; return entry; });
+    return entry.promise;
+  }
+  pump() {
+    while (this.working < 2 && this.queue.length) {
+      const job = this.queue.shift();
+      this.working++;
+      this.decode(job).then(job.resolve, job.reject).finally(() => { this.working--; this.pump(); });
+    }
+  }
+  async decode({ entry, stem, i }) {
+    const live = () => { if (this.closed || entry.abort.signal.aborted) throw new DOMException('Room closed', 'AbortError'); };
+    live();
+    const { rate } = this, t = entry.index * this.step, frames = stem.offsets.length - 1;
+    const first = clamp(Math.floor(((t - this.guard) * rate + stem.skip) / FRAME), 0, frames - 1);
+    const last = clamp(Math.ceil(((t + this.step + this.guard) * rate + stem.skip) / FRAME), first + 1, frames);
+    const data = await this.read(stem, stem.offsets[first], stem.offsets[last], entry.abort.signal);
+    live();
+    const buffer = await this.decoder.decodeAudioData(data);
+    live();
+    entry.buffers[i] = buffer;
+    entry.origins[i] = (first * FRAME + this.drop - stem.skip) / rate;   // the song time of the buffer's first sample
+    if (entry.index === 0) this.onProgress?.(entry.buffers.filter(Boolean).length / this.stems.length);
+    this.stats();
+  }
+  retain(indices) {
+    for (const [i, entry] of this.windows) if (!indices.has(i)) { entry.abort.abort(); this.windows.delete(i); }
+  }
+  // decoded audio held, for tests
+  stats(extra = []) {
+    const buffers = new Set([...this.windows.values()].flatMap(e => e.buffers).concat(extra).filter(Boolean));
+    const bytes = [...buffers].reduce((sum, b) => sum + b.length * b.numberOfChannels * 4, 0);
+    this.peakBytes = Math.max(this.peakBytes, bytes);
+    return { bytes, peakBytes: this.peakBytes, windows: this.windows.size, rate: this.decoder?.sampleRate, decoderDrop: this.drop };
+  }
+  close() {
+    if (this.closed) return;
+    this.closed = true;
+    this.signal.removeEventListener('abort', this.onAbort);
+    this.retain(new Set());
+    for (const job of this.queue.splice(0)) job.reject(new DOMException('Room closed', 'AbortError'));
+    for (const stem of this.stems) stem.whole = null;
+  }
+}
+
+// Reads the song's frame index and decodes its first chunk.
+async function fetchStems(urls, signal, onProgress) {
+  const { stream } = await fetchJSON(`${urls[0].slice(0, urls[0].lastIndexOf('/') + 1)}song.json`);
+  const windows = new StemWindows(urls, stream, signal, onProgress);
+  try { return await windows.open(); } catch (error) { windows.close(); throw error; }
+}
+
+// Plays the stems in sync, looping. Per stem: gate (sequencer on/off) → level → meter, plus a cut path that carries
+// stutters into an echo. Also plays synthesised drums. Output sits 2 dB down into a safety limiter.
+class Mixer {
+  constructor(windows, values, onError = console.error) {
+    const ctx = this.ctx = audioContext();
+    this.windows = windows;
+    this.duration = windows.duration;
+    this.onError = onError;
+    this.pending = new Set();
+    this.output = ctx.createGain();
+    this.output.gain.value = .79;   // −2 dB
+    const limiter = ctx.createDynamicsCompressor();
+    Object.entries({ threshold: -1, knee: 0, ratio: 20, attack: .003, release: .25 }).forEach(([k, v]) => limiter[k].value = v);
+    this.output.connect(limiter).connect(ctx.destination);
+    this.channels = values.map((_, i) => {
+      const gate = ctx.createGain(), gain = ctx.createGain(), cut = ctx.createGain(), meter = ctx.createAnalyser();
+      gain.gain.value = cut.gain.value = gainFor(values[i]);
+      meter.fftSize = 512;
+      gate.connect(gain);
+      for (const level of [gain, cut]) { level.connect(meter); level.connect(this.output); }
+      return { gate, gain, cut, meter };
+    });
+    this.samples = new Float32Array(512);
+    this.sources = [];
+    this.cuts = [];
+    this.seek(0);
+    this.clock = setInterval(() => this.schedule(), 100);
+    this.visibility = () => this.schedule();
+    document.addEventListener('visibilitychange', this.visibility);
+  }
+  get position() { return this.seeking ? this.target : Math.max(0, this.ctx.currentTime - this.startedAt) % this.duration; }
+  seek(seconds) {
+    const offset = ((seconds % this.duration) + this.duration) % this.duration;
+    const generation = this.generation = (this.generation || 0) + 1;
+    this.target = offset;
+    this.seeking = true;
+    this.stopSources();
+    this.pending.clear();
+    const index = this.windows.index(offset);
+    this.windows.retain(new Set([index]));
+    const begin = () => {
+      if (this.stopped || generation !== this.generation) return;
+      this.startedAt = this.ctx.currentTime + .08 - offset;
+      this.cursor = offset;
+      this.seeking = false;
+      this.schedule();
+    };
+    if (this.windows.windows.get(index)?.ready) { begin(); return Promise.resolve(); }
+    return this.windows.ensure(index).then(begin).catch(error => {
+      if (generation === this.generation && !this.stopped && error.name !== 'AbortError') this.fail(error);
+    });
+  }
+  // Queues chunks a few seconds ahead on the audio clock.
+  schedule() {
+    if (this.stopped || this.seeking) return;
+    this.prune();
+    const now = this.ctx.currentTime, horizon = now + this.windows.step * (document.hidden ? 2 : 1.5);
+    // fell behind (network stall or frozen tab): carry on from where it got to
+    if (this.startedAt + this.cursor < now - .02) { this.seek(this.cursor % this.duration); return; }
+    const keep = new Set(this.sources.map(s => s.windowIndex));
+    while (this.startedAt + this.cursor < horizon) {
+      const cycle = Math.floor(this.cursor / this.duration), songTime = this.cursor - cycle * this.duration;
+      const index = this.windows.index(songTime), entry = this.windows.windows.get(index);
+      keep.add(index);
+      if (!entry?.ready) {
+        if (!this.pending.has(index)) {
+          this.pending.add(index);
+          this.windows.ensure(index).then(() => { this.pending.delete(index); this.schedule(); }).catch(error => {
+            this.pending.delete(index);
+            if (!this.stopped && error.name !== 'AbortError') this.fail(error);
+          });
+        }
+        break;
+      }
+      const end = Math.min(this.duration, (index + 1) * this.windows.step), length = end - songTime;
+      if (length < 1e-8) { this.cursor = (cycle + 1) * this.duration; continue; }
+      const at = this.startedAt + this.cursor;
+      if (at < now - .02) { this.seek(songTime); return; }
+      entry.buffers.forEach((_, i) => this.play(entry, i, at, songTime, length));
+      this.cursor = cycle * this.duration + end;
+    }
+    this.windows.retain(keep);
+    this.pcmStats();
+  }
+  // One stem's share of a chunk (song time `from`, `length` s, at context time `at`), faded where chunks overlap.
+  play(entry, i, at, from, length) {
+    const { ctx } = this, half = CROSSFADE / 2, lead = Math.min(half, from), tail = Math.min(half, this.duration - from - length);
+    const src = ctx.createBufferSource(), env = ctx.createGain(), start = at - lead, end = at + length + tail;
+    env.gain.setValueAtTime(0, start);
+    env.gain.linearRampToValueAtTime(1, at + Math.max(lead, .001));
+    env.gain.setValueAtTime(1, at + length - Math.max(tail, .001));
+    env.gain.linearRampToValueAtTime(0, end);
+    src.buffer = entry.buffers[i];
+    src.connect(env).connect(this.channels[i].gate);
+    src.start(start, from - lead - entry.origins[i], end - start);
+    Object.assign(src, { env, windowIndex: entry.index, startsAt: start, endsAt: end });
+    src.onended = () => { env.disconnect(); this.sources = this.sources.filter(s => s !== src); };
+    this.sources.push(src);
+  }
+  pcmStats() { return this.windows.stats([...this.sources, ...this.cuts].map(s => s.buffer).concat(this.noise)); }
+  fail(error) { this.stop(); this.onError(error); }
+  set(i, value, glide) {
+    const now = this.ctx.currentTime;
+    for (const level of [this.channels[i].gain, this.channels[i].cut]) {
+      level.gain.cancelScheduledValues(now);
+      level.gain.setTargetAtTime(gainFor(value), now, glide);
+    }
+  }
+  // Stutter: replays a slice of stem i `repeats` times from context time `at`.
+  stutter(i, from, at, slice, repeats, echoTime) {
+    const { ctx } = this, cut = this.channels[i].cut;
+    from %= this.duration;
+    const entry = this.windows.windows.get(this.windows.index(from));
+    if (!entry?.ready) { this.fail(new Error('The stutter window did not arrive in time')); return; }
+    this.echo(echoTime);
+    this.prune();
+    for (let k = 0; k < repeats; k++) {
+      const t = at + k * slice, src = ctx.createBufferSource(), env = ctx.createGain();
+      env.gain.setValueAtTime(0, t);                       // tiny fades, so the slices don't click
+      env.gain.linearRampToValueAtTime(1, t + .002);
+      env.gain.setValueAtTime(1, t + slice - .006);
+      env.gain.linearRampToValueAtTime(0, t + slice);
+      src.buffer = entry.buffers[i];
+      src.connect(env).connect(cut);
+      src.start(t, from - entry.origins[i], Math.min(slice, this.duration - from));
+      Object.assign(src, { startsAt: t, endsAt: t + slice });
+      this.cuts.push(src);
+    }
+  }
+  // A synthesised kick, snare or hat at context time `at`.
+  drum(kind, at) {
+    const { ctx } = this;
+    if (!this.drums) {
+      this.drums = ctx.createGain();
+      this.drums.gain.value = .55;
+      this.drums.connect(this.output);
+      const noise = this.noise = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate), d = noise.getChannelData(0);
+      for (let k = 0; k < d.length; k++) d[k] = Math.random() * 2 - 1;
+    }
+    const voice = (src, peak, decay, ...chain) => {
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, at);
+      env.gain.linearRampToValueAtTime(peak, at + .002);
+      env.gain.exponentialRampToValueAtTime(.001, at + decay);
+      [src, ...chain, env].reduce((a, b) => a.connect(b)).connect(this.drums);
+      src.start(at);
+      src.stop(at + decay + .02);
+      Object.assign(src, { startsAt: at, endsAt: at + decay });
+      this.cuts.push(src);
+    };
+    const noise = () => { const n = ctx.createBufferSource(); n.buffer = this.noise; return n; };
+    const filter = (type, frequency, Q = .7) => { const f = ctx.createBiquadFilter(); Object.assign(f, { type }); f.frequency.value = frequency; f.Q.value = Q; return f; };
+    if (kind === 'kick') {
+      const osc = ctx.createOscillator();
+      osc.frequency.setValueAtTime(150, at);
+      osc.frequency.exponentialRampToValueAtTime(45, at + .12);
+      voice(osc, 1, .45);
+    } else if (kind === 'snare') {
+      voice(noise(), .6, .2, filter('bandpass', 1800));
+      const body = ctx.createOscillator();
+      body.type = 'triangle'; body.frequency.value = 190;
+      voice(body, .4, .12);
+    } else voice(noise(), .35, .05, filter('highpass', 7000));
+  }
+  prune() {
+    const now = this.ctx.currentTime;
+    this.cuts = this.cuts.filter(src => { if (src.endsAt > now) return true; src.disconnect(); return false; });
+  }
+  cancelCuts(after = 0) {
+    for (const src of this.cuts) if (src.startsAt > after) try { src.stop(); src.endsAt = this.ctx.currentTime; } catch {}
+  }
+  // Feedback echo for the cut paths only.
+  echo(time) {
+    if (!this.echoes) {
+      const { ctx } = this, input = ctx.createGain(), delay = ctx.createDelay(2), tone = ctx.createBiquadFilter(), feedback = ctx.createGain(), wet = ctx.createGain();
+      tone.type = 'lowpass'; tone.frequency.value = 2800;
+      feedback.gain.value = .38;
+      wet.gain.value = .4;
+      input.connect(delay).connect(tone).connect(feedback).connect(delay);
+      tone.connect(wet).connect(this.output);
+      for (const ch of this.channels) ch.cut.connect(input);
+      this.echoes = delay;
+    }
+    this.echoes.delayTime.value = time;
+  }
+  gate(i) { return this.channels[i].gate.gain; }
+  // song position as heard, allowing for output latency (large on Bluetooth)
+  get heard() { const lag = this.ctx.outputLatency || this.ctx.baseLatency || 0; return (this.position - lag + this.duration) % this.duration; }
+  rms(i) {
+    const s = this.samples;
+    this.channels[i].meter.getFloatTimeDomainData(s);
+    let sum = 0;
+    for (let k = 0; k < s.length; k++) sum += s[k] * s[k];
+    return Math.sqrt(sum / s.length);
+  }
+  stopSources() {
+    for (const src of [...this.sources, ...this.cuts]) { src.onended = null; try { src.stop(); } catch {} src.disconnect(); src.env?.disconnect(); }
+    this.sources.length = this.cuts.length = 0;
+  }
+  stop() {
+    this.stopped = true;
+    clearInterval(this.clock);
+    document.removeEventListener('visibilitychange', this.visibility);
+    this.stopSources();
+    this.windows.close();
+    this.output.disconnect();
+    this.noise = null;
+  }
+}
+
+// ——— eyes —————————————————————————————————————————————————————————————————————————————————————————————————
+// gaze = { ox, oy, pup }: iris offset (−1…1 across the ball) and pupil size.
+
+const look = (gaze, ox, oy, pup, rate) => {
+  gaze.ox = ease(gaze.ox, ox, rate);
+  gaze.oy = ease(gaze.oy, oy, rate);
+  gaze.pup = ease(gaze.pup, pup, .08);
+};
+const toward = (dx, dy, length) => { const d = Math.hypot(dx, dy) || 1; return [dx / d * length, dy / d * length]; };
+// Gaze toward a point: further away, further the iris rolls (up to half way).
+const gazeToward = (px, py, x, y, r, min = .08) => toward(px - x, py - y, Math.min(.5, Math.hypot(px - x, py - y) / (r * 6) * .5 + min));
+
+// The iris: a disc squashed in the direction of gaze, so the ball seems to turn.
+function drawIris(g, iris, x, y, r, gaze, scale = .55, clip = .97) {
+  const off = Math.min(.97, Math.hypot(gaze.ox, gaze.oy)), size = 2 * r * scale / (460 / 512);
+  g.save();
+  g.beginPath(); g.arc(x, y, r * clip, 0, TAU); g.clip();
+  g.translate(x + gaze.ox * r * .78, y + gaze.oy * r * .78);
+  g.rotate(Math.atan2(gaze.oy, gaze.ox));
+  g.scale(Math.sqrt(1 - off * off) * .85 + .15, 1);
+  g.drawImage(iris, -size / 2, -size / 2, size, size);
+  g.fillStyle = 'rgba(3,3,4,.92)';
+  g.beginPath(); g.arc(0, 0, size * .13 * gaze.pup, 0, TAU); g.fill();
+  g.restore();
+}
+
+// Shading and glow are drawn once into sprites and stamped onto each eye.
+function shadeSprite(clip, [cx, cy, inner], stops, glint) {
+  const S = 256, R = S / 2, [c, x] = makeCanvas(S);
+  x.beginPath(); x.arc(R, R, R * clip, 0, TAU); x.clip();
+  const grad = x.createRadialGradient(R + cx * R, R + cy * R, inner * R, R, R, R);
+  for (const [at, a] of stops) grad.addColorStop(at, `rgba(0,0,0,${a})`);
+  x.fillStyle = grad; x.fillRect(0, 0, S, S);
+  if (glint) { x.fillStyle = 'rgba(235,240,248,.42)'; x.beginPath(); x.ellipse(R * 1.38, R * .58, R * .16, R * .09, .7, 0, TAU); x.fill(); }
+  return c;
+}
+const SHADE = {
+  kit: shadeSprite(.97, [-.2, -.3, .4], [[0, 0], [.8, .08], [1, .45]]),
+  figure: shadeSprite(.985, [-.25, -.3, .35], [[0, 0], [.78, .1], [1, .5]], true),   // with the window's reflection
+};
+const GLOW = (() => {   // spans 1.6 × the eye's radius
+  const S = 256, R = S / 2, [c, x] = makeCanvas(S), grad = x.createRadialGradient(R, R, R * .95 / 1.6, R, R, R);
+  grad.addColorStop(0, 'rgb(130,175,225)'); grad.addColorStop(1, 'rgba(130,175,225,0)');
+  x.fillStyle = grad; x.beginPath(); x.arc(R, R, R, 0, TAU); x.fill();
+  return c;
+})();
+
+function drawKitEye(g, sclera, iris, x, y, r, gaze) {
+  const s = 2 * r * 512 / 480;
+  g.drawImage(sclera, x - s / 2, y - s / 2, s, s);
+  drawIris(g, iris, x, y, r, gaze);
+  g.drawImage(SHADE.kit, x - r, y - r, 2 * r, 2 * r);
+}
+
+// ——— rooms ————————————————————————————————————————————————————————————————————————————————————————————————
+
+const IDLE_MS = 11000;   // keep still this long and the room stares back
+
+class Room {
+  artWidth = 1080;
+  vignette = [.32, .6];   // how dark the edges are: normally, and while staring
+  glide = () => .06;      // seconds for a level change to settle
+
+  constructor(song, app) {
+    this.song = song;
+    this.app = app;
+    this.cv = ui.c;
+    this.g = this.cv.getContext('2d');
+    this.listeners = new AbortController();
+    this.pointer = { x: 0, y: 0, has: false };
+    this.parts = [];
+    this.lastMove = performance.now();
+    this.staring = false;
+    this.glitch = { until: 0, next: performance.now() + 5000 };
+  }
+
+  // Images first (drawn behind the title card), then the first chunk of audio.
+  async open(signal, onProgress) {
+    await this.prepare();
+    if (signal.aborted) return;
+    this.resize();
+    this.listen();
+    this.buildRows();
+    this.drawable = true;
+    this.buffers = await fetchStems(this.stemUrls, signal, onProgress);
+  }
+
+  start() {
+    if (!this.buffers) return Promise.resolve();
+    return this.starting ??= (async () => {
+      this.started = true;
+      await audioContext().resume();
+      this.mixer = new Mixer(this.buffers, this.parts.map(p => p.value), error => { console.error(error); this.app.failCard(); });
+      this.lastMove = performance.now();
+      this.app.started();
+    })();
+  }
+  begin() { return this.started ? Promise.resolve() : this.start(); }
+
+  destroy() {
+    this.listeners.abort();
+    this.mixer?.stop();
+    this.buffers?.close?.();
+  }
+
+  resize() {
+    const { g } = this, { W, H } = this.app.view;
+    this.K = W / this.artWidth;
+    this.vignettes = this.vignette.map(a => {
+      const v = g.createRadialGradient(W / 2, H / 2, W * .35, W / 2, H / 2, H * .75);
+      v.addColorStop(0, 'rgba(0,0,0,0)');
+      v.addColorStop(1, `rgba(0,0,0,${a})`);
+      return v;
+    });
+    this.layout?.();
+  }
+
+  // ——— levels
+  setValue(part, value, fromList = false) {
+    const wasOn = part.value > ON;
+    part.value = clamp(value);
+    const on = part.value > ON, { li, button, range } = part.row;
+    li.classList.toggle('on', on);
+    button.setAttribute('aria-pressed', on);
+    if (!fromList) range.value = Math.round(part.value * 100);
+    this.mixer?.set(part.i, part.value, this.glide(on));
+    if (wasOn && !on) this.onSleep?.(part);
+    this.stir();
+  }
+  toggle(part) { this.setValue(part, part.value > ON ? 0 : part.rest); }
+  wakeAll() { for (const p of this.parts) { p.rest = MIX; this.setValue(p, MIX); } }
+  sleepAll() { for (const p of this.parts) this.setValue(p, 0); }
+
+  // ——— input
+  listen() {
+    const { cv } = this, opts = { signal: this.listeners.signal };
+    const toArt = ev => { const b = cv.getBoundingClientRect(); return { x: (ev.clientX - b.left) / this.K, y: (ev.clientY - b.top) / this.K }; };
+    const track = ev => { Object.assign(this.pointer, toArt(ev), { has: true }); this.stir(); return this.pointer; };
+    // touch: a drag on a control moves it; elsewhere it scrolls the page
+    cv.addEventListener('touchstart', ev => { const t = ev.touches[0]; if (t && this.grabs(toArt(t))) ev.preventDefault(); }, { ...opts, passive: false });
+    cv.addEventListener('pointerdown', ev => { if (this.press(track(ev))) { ev.preventDefault(); cv.setPointerCapture(ev.pointerId); } }, opts);
+    cv.addEventListener('pointermove', ev => this.drag(track(ev)), opts);
+    cv.addEventListener('pointerup', () => this.release(false), opts);
+    cv.addEventListener('pointercancel', () => this.release(true), opts);
+  }
+  grabs() { return false; }
+  press() { return false; }
+  drag() {}
+  release() {}
+
+  stir() {
+    this.lastMove = performance.now();
+    if (this.staring) { this.staring = false; this.app.whisper(false); }
+  }
+
+  // ——— the mix list: a toggle, a level meter and a slider per part
+  buildRows() {
+    const opts = { signal: this.listeners.signal };
+    ui.stems.replaceChildren(...this.parts.map(part => {
+      const li = document.createElement('li');
+      li.innerHTML = '<button aria-pressed="false"><span class="dot"></span><span class="name"></span><span class="meter"><i></i></span></button>'
+                   + '<input type="range" min="0" max="100" value="0">';
+      const [button, range] = li.children;
+      if (part.color) li.style.setProperty('--iris', part.color);
+      button.querySelector('.name').textContent = part.label;
+      range.id = `level-${part.id}`;
+      range.setAttribute('aria-label', `${part.label} level`);
+      button.addEventListener('click', async () => { await this.begin(); this.toggle(part); }, opts);
+      range.addEventListener('input', async () => {
+        await this.begin();
+        const v = range.value / 100;
+        if (v >= ON) part.rest = v;
+        this.setValue(part, v, true);
+      }, opts);
+      part.row = { li, button, range, meter: button.querySelector('.meter i'), shown: -1 };
+      return li;
+    }));
+  }
+
+  // ——— one frame
+  frame(t) {
+    if (this.mixer) {
+      if (!this.staring && t - this.lastMove > IDLE_MS) { this.staring = true; this.app.whisper(true); }
+      for (const p of this.parts) {
+        p.signal = ease(p.signal, Math.min(1, this.mixer.rms(p.i) * 4), .3);
+        const pct = Math.round(p.signal * 100);
+        if (pct !== p.row.shown) p.row.meter.style.width = `${p.row.shown = pct}%`;
+      }
+    }
+    const { W, H, DPR } = this.app.view;
+    this.g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    this.draw({ g: this.g, t, W, H, K: this.K });
+    this.finish(t, W, H, DPR);
+    this.overlay?.(t);
+  }
+
+  // Occasional tape-glitch bands, then the vignette.
+  finish(t, W, H, DPR) {
+    const { g, cv, glitch } = this;
+    if (!reduceMotion) {
+      if (t > glitch.next) { glitch.until = t + 110 + Math.random() * 120; glitch.next = t + 5000 + Math.random() * 8000; }
+      if (t < glitch.until) for (let n = 3 + Math.floor(Math.random() * 3); n--;) {
+        const y = Math.random() * H, h = 4 + Math.random() * 22;
+        g.drawImage(cv, 0, y * DPR, cv.width, h * DPR, (Math.random() - .5) * 24, y, W, h);
+      }
+    }
+    g.fillStyle = this.vignettes[+this.staring];
+    g.fillRect(0, 0, W, H);
+  }
+
+  // now and then an open eye flickers sideways for a few frames
+  twitch(part, t) {
+    if (!reduceMotion && Math.random() < .003) part.twitch = 8;
+    if (part.twitch <= 0) return 0;
+    part.twitch--;
+    return Math.sin(t * .05 + part.phase) * .07;
+  }
+}
+
+const newPart = (data, i, phase) => ({ ...data, i, phase, value: 0, rest: MIX, signal: 0, twitch: 0, gaze: { ox: 0, oy: -.95, pup: 1 } });
+
+// ——— figure rooms: painted figures from the album art, one per stem
+class FigureRoom extends Room {
+  static how = ['<b>Tap a figure</b> to wake its part. Tap again to let it sleep.', '<b>Move</b> and the open eyes follow you.', '<b>Keep still</b> for a while.'];
+  static label = 'An eyeball figure for each stem of the song. Tap a figure to wake its part.';
+  vignette = [.35, .65];
+  glide = on => on ? .12 : .35;
+
+  async prepare() {
+    const base = this.song.base, data = await fetchJSON(`${base}song.json`), img = memo(src => loadImage(base + src));
+    this.artWidth = data.w;
+    [this.room, this.paint] = await Promise.all([img(data.room), img(data.paint)]);
+    this.parts = await Promise.all(data.figures.map(async (f, i) => {
+      const [body, iris] = await Promise.all([img(f.body), img(f.iris)]);
+      return { ...newPart(f, i, i * 1.7), body, iris, fy: 0 };
+    }));
+    this.order = [...this.parts].sort((a, b) => a.z - b.z);
+    this.stemUrls = data.figures.map(f => base + f.audio);
+  }
+
+  press(p) {
+    const hit = this.figureAt(p);
+    if (hit) this.begin().then(() => this.toggle(hit));
+    return false;
+  }
+  // The nearest eye, or else the front-most figure with paint under the pointer.
+  figureAt({ x, y }) {
+    let hit = null, best = Infinity;
+    for (const f of this.parts) {
+      const d = Math.hypot(x - f.eye.x, y - f.eye.y - f.fy);
+      if (d < f.eye.r * 1.4 && d < best) { best = d; hit = f; }
+    }
+    if (hit) return hit;
+    for (let i = this.order.length; i--;) {
+      const f = this.order[i], { width, height } = f.body, bx = Math.floor(x - f.x), by = Math.floor(y - f.y - f.fy);
+      if (bx >= 0 && by >= 0 && bx < width && by < height && this.alpha(f)[(by * width + bx) * 4 + 3] > 40) return f;
+    }
+    return null;
+  }
+  alpha(f) {
+    if (!f.alpha) {
+      const [, x] = makeCanvas(f.body.width, f.body.height);
+      x.drawImage(f.body, 0, 0);
+      f.alpha = x.getImageData(0, 0, f.body.width, f.body.height).data;
+    }
+    return f.alpha;
+  }
+
+  draw({ g, t, W, H, K }) {
+    const { pointer, staring } = this;
+    g.drawImage(this.room, 0, 0, W, H);
+    g.drawImage(this.paint, 0, 0, W, H);
+    for (const f of this.order) {
+      f.fy = f.float?.amp && !reduceMotion ? f.float.amp * Math.sin(t / 1000 * TAU / f.float.period + f.phase) : 0;
+      g.drawImage(f.body, f.x * K, (f.y + f.fy) * K, f.body.width * K, f.body.height * K);
+      const awake = f.value > ON, ex = f.eye.x, ey = f.eye.y + f.fy;
+      let tx = 0, ty = 0, tp = 1.35;   // staring: straight out, pupils wide
+      if (!staring && awake) {
+        [tx, ty] = pointer.has ? gazeToward(pointer.x, pointer.y, ex, ey, f.eye.r) : [.25, 0];   // or toward the window
+        tx += this.twitch(f, t);
+        tp = 1 - f.signal * .35;
+      } else if (!staring) [tx, ty, tp] = [Math.sin(t * .0004 + f.phase) * .12, -.95, 1];
+      look(f.gaze, tx, ty, tp, awake || staring ? .12 : .05);
+      this.drawEye(g, f, ex * K, ey * K, f.eye.r * K, awake);
+    }
+  }
+  drawEye(g, f, x, y, r, awake) {
+    drawIris(g, f.iris, x, y, r, f.gaze, f.iris_scale, .985);
+    g.drawImage(SHADE.figure, x - r, y - r, 2 * r, 2 * r);
+    if (!awake && !this.staring) { g.fillStyle = 'rgba(8,9,12,.22)'; g.beginPath(); g.arc(x, y, r * .985, 0, TAU); g.fill(); }
+    if (awake && f.signal > .02) {
+      g.globalCompositeOperation = 'screen';
+      g.globalAlpha = Math.min(.45, f.signal * .9);
+      g.drawImage(GLOW, x - r * 1.6, y - r * 1.6, r * 3.2, r * 3.2);
+      g.globalAlpha = 1;
+      g.globalCompositeOperation = 'source-over';
+    }
+  }
+  overlay() {   // part names over the open eyes, above the vignette
+    if (this.staring) return;
+    const { g, K } = this;
+    g.font = `500 ${Math.max(9, 17 * K)}px "IBM Plex Mono",monospace`;
+    g.textAlign = 'center';
+    g.fillStyle = 'rgba(230,226,220,.8)';
+    for (const f of this.parts) if (f.value > ON) g.fillText(f.label.toUpperCase(), f.eye.x * K, (f.eye.y + f.fy - f.eye.r - 14) * K);
+  }
+}
+
+// ——— fader rooms: a desk from the shared kit, one eye-knob fader per stem
+const kit = memo(name => loadImage(KIT + name));
+const kitLayouts = memo(() => fetchJSON(KIT + 'layouts.json'));
+const KIT_BADGES = new Set(['drums', 'percussion', 'tambourine', 'bass-guitar', 'bass-synth', 'electric-guitar', 'acoustic-guitar', 'lead-guitar', 'piano', 'vocal']);
+const badge = memo(name => KIT_BADGES.has(name) ? kit(`badge-${name}.webp`).catch(() => drawBadge(name)) : Promise.resolve(drawBadge(name)));
+
+// A kit image recoloured (iris, rail glow), for channels with their own colour.
+function tint(base, color) {
+  const { width: w, height: h } = base, [c, x] = makeCanvas(w, h);
+  x.drawImage(base, 0, 0);
+  x.globalCompositeOperation = 'multiply'; x.fillStyle = color; x.fillRect(0, 0, w, h);
+  x.globalCompositeOperation = 'screen'; x.globalAlpha = .18; x.fillRect(0, 0, w, h);
+  x.globalCompositeOperation = 'destination-in'; x.globalAlpha = 1; x.drawImage(base, 0, 0);
+  return c;
+}
+
+// A drawn badge for instruments the kit has no picture for.
+const BADGE_HUES = { 'slide-guitar': [34, 62], synth: [268, 300], organ: [18, 40], strings: [350, 20], brass: [42, 58],
+  'backing-vocals': [200, 222], pad: [176, 200], fx: [120, 160], radio: [60, 84], 'field-recording': [150, 176] };
+function drawBadge(name) {
+  const hash = [...name].reduce((h, ch) => (h * 31 + ch.charCodeAt(0)) % 360, 0);
+  const [h1, h2] = BADGE_HUES[name] ?? [hash, (hash + 28) % 360];
+  const S = 160, m = S / 2, R = S * .4, [c, x] = makeCanvas(S);
+  const disc = (r, fill) => { x.fillStyle = fill; x.beginPath(); x.arc(m, m, r, 0, TAU); x.fill(); };
+  x.fillStyle = 'rgba(0,0,0,.35)';
+  x.beginPath(); x.ellipse(m, m + R * .92, R * .85, R * .18, 0, 0, TAU); x.fill();
+  let grad = x.createLinearGradient(0, m - R, 0, m + R);
+  [[0, '#3a3d42'], [.5, '#0d0e10'], [1, '#26282c']].forEach(([at, col]) => grad.addColorStop(at, col));
+  disc(R * 1.08, grad);
+  grad = x.createRadialGradient(m, m, R * .12, m, m, R);
+  [[0, `hsl(${h2} 70% 72%)`], [.45, `hsl(${h1} 62% 50%)`], [.86, `hsl(${h1} 58% 26%)`], [1, `hsl(${h1} 50% 10%)`]].forEach(([at, col]) => grad.addColorStop(at, col));
+  disc(R, grad);
+  x.strokeStyle = `hsla(${h2} 80% 85% / .22)`; x.lineWidth = 1.2;
+  x.beginPath();
+  for (let k = 0; k < 48; k++) {
+    const a = k / 48 * TAU + (k % 3) * .02;
+    x.moveTo(m + Math.cos(a) * R * .3, m + Math.sin(a) * R * .3);
+    x.lineTo(m + Math.cos(a) * R * .88, m + Math.sin(a) * R * .88);
+  }
+  x.stroke();
+  disc(R * .28, '#050506');
+  x.fillStyle = 'rgba(160,24,30,.85)';   // a drip of the cover's paint
+  x.beginPath();
+  x.moveTo(m + R * .55, m - R * .86); x.quadraticCurveTo(m + R * .72, m - R * .4, m + R * .62, m - R * .15);
+  x.arc(m + R * .6, m - R * .15, R * .06, 0, Math.PI); x.quadraticCurveTo(m + R * .5, m - R * .5, m + R * .4, m - R * .9);
+  x.fill();
+  x.fillStyle = 'rgba(255,255,255,.55)';
+  x.beginPath(); x.ellipse(m - R * .32, m - R * .42, R * .16, R * .09, -.6, 0, TAU); x.fill();
+  return c;
+}
+
+class FaderRoom extends Room {
+  static how = ['<b>Drag an eye up</b> to bring its part in. All the way down, it sleeps.', '<b>Tap an eye</b> to wake it, or to send it back to sleep.',
+                '<b>Move</b> and the open eyes follow you.', '<b>Keep still</b> for a while.'];
+  static label = 'A desk of faders in the room. Each knob is an eye; drag it up to bring in its part.';
+
+  async prepare() {
+    const base = this.song.base, [data, layouts] = await Promise.all([fetchJSON(`${base}song.json`), kitLayouts()]);
+    const layout = layouts[data.channels.length];
+    [this.room, this.paint, this.desk, this.rail, this.railGlow, this.iris] = await Promise.all([
+      kit(`room-${data.room}.jpg`), kit(`paint-${data.paint}.webp`), kit('desk.webp'), kit('rail.webp'), kit('rail-glow.webp'), kit(`iris-${data.iris ?? 'blue'}.webp`)]);
+    this.deskBox = layout.desk;
+    const slots = layout.banks.flatMap(b => b.x.map(x => ({ x, top: b.rail_top, bottom: b.rail_bottom, r: b.eye_r ?? layout.eye_r, badgeSize: b.badge ?? layout.badge })));
+    this.parts = await Promise.all(data.channels.map(async (c, i) => ({
+      ...newPart(c, i, i * 1.9), ...slots[i], shown: 0,
+      sclera: await kit(`sclera-${c.sclera ?? i % 4 + 1}.webp`), badgeImg: await badge(c.badge),
+      irisImg: c.color ? tint(this.iris, c.color) : this.iris, glowImg: c.color ? tint(this.railGlow, c.color) : this.railGlow })));
+    // caption width: the gap to the next fader in the bank
+    this.captionRoom = Math.min(165, .9 * Math.min(...this.parts.flatMap(p => this.parts.filter(q => q.top === p.top && q.x > p.x).map(q => q.x - p.x))));
+    this.stemUrls = data.channels.map(c => base + c.audio);
+    const fx = new Set(data.effects);
+    this.effects = EFFECTS.filter(([name]) => fx.has(name)).map(([, Effect]) => new Effect(this, data));
+    await Promise.all(this.effects.map(e => e.load?.()));
+    this.outsider = this.effects.find(e => e instanceof Outsider);
+  }
+
+  // Fits each caption to its channel (once per size).
+  layout() {
+    const { g, K } = this, maxW = this.captionRoom * K, fontAt = px => `500 ${px}px "IBM Plex Mono",monospace`;
+    for (const p of this.parts) {
+      const words = p.label.toUpperCase().split(' ');
+      let size = Math.max(7, 19 * K);
+      g.font = fontAt(size);
+      const widest = Math.max(...words.map(w => g.measureText(w).width));
+      if (widest > maxW) g.font = fontAt(size = Math.max(6, size * maxW / widest));
+      const lines = [''];
+      for (const w of words) {
+        const line = lines.at(-1), next = line ? `${line} ${w}` : w;
+        if (line && g.measureText(next).width > maxW) lines.push(w); else lines[lines.length - 1] = next;
+      }
+      p.caption = { font: fontAt(size), size, lines };
+    }
+  }
+
+  eyeY(p) { return p.bottom - p.shown * (p.bottom - p.top); }
+  onSleep(p) { for (const e of this.effects) e.sleep?.(p); }
+
+  // ——— input: drag a fader; tap to toggle
+  channelAt(p) {
+    let part = null, best = Infinity;
+    for (const c of this.parts) {
+      const d = Math.hypot(p.x - c.x, p.y - this.eyeY(c));
+      const onRail = Math.abs(p.x - c.x) < c.r * 1.2 && p.y > c.top - c.r && p.y < c.bottom + c.r;
+      if ((d < c.r * 1.5 || onRail) && d < best) { best = d; part = c; }
+    }
+    return part && { part, onEye: best < part.r * 1.5 };
+  }
+  grabs(p) { return !!this.channelAt(p); }
+  press(p) {
+    const hit = this.channelAt(p);
+    if (!hit) return false;
+    this.dragging = { ...hit, y0: p.y, moved: false, grip: p.y - this.eyeY(hit.part) };
+    this.begin();
+    return true;
+  }
+  drag(p) {
+    const d = this.dragging;
+    if (!d) return;
+    if (Math.abs(p.y - d.y0) > 6) d.moved = true;
+    if (d.moved) {
+      const c = d.part, y = p.y - (d.onEye ? d.grip : 0);
+      this.setValue(c, (c.bottom - y) / (c.bottom - c.top));
+    }
+  }
+  release(cancelled) {
+    const d = this.dragging;
+    this.dragging = null;
+    if (d && !d.moved && !cancelled) this.toggle(d.part);
+  }
+
+  // ——— drawing, back to front
+  draw(f) {
+    const { g, W, H } = f;
+    f.mix = this.parts.reduce((sum, p) => sum + Math.min(1, p.value / MIX), 0) / this.parts.length;
+    for (const e of this.effects) e.update?.(f);
+    g.drawImage(this.room, 0, 0, W, H);
+    for (const e of this.effects) e.light?.(f);
+    g.drawImage(this.paint, 0, 0, W, H);
+    for (const e of this.effects) e.scene?.(f);
+    this.drawDesk(f);
+    this.drawEyes(f);
+    for (const e of this.effects) e.front?.(f);
+  }
+
+  drawDesk({ g, K }) {
+    const d = this.deskBox;
+    g.drawImage(this.desk, d.x * K, d.y * K, d.width * K, d.height * K);
+    g.textAlign = 'center';
+    for (const p of this.parts) {
+      p.shown = ease(p.shown, p.value, .25);
+      const on = p.value > ON, x = (p.x - 28) * K, y = (p.top - p.r * .7) * K, w = 56 * K, h = (p.bottom - p.top + p.r * 1.4) * K;
+      g.drawImage(this.rail, x, y, w, h);
+      if (on && p.signal > .01) { g.globalAlpha = Math.min(1, .25 + p.signal * 1.6); g.drawImage(p.glowImg, x, y, w, h); g.globalAlpha = 1; }
+      const bs = p.badgeSize * 1.35, by = p.bottom + p.r + bs * .5;
+      g.drawImage(p.badgeImg, (p.x - bs / 2) * K, (by - bs / 2) * K, bs * K, bs * K);
+      const { font, size, lines } = p.caption;
+      g.font = font;
+      g.fillStyle = on ? p.color ?? 'rgba(236,240,244,.92)' : 'rgba(190,196,204,.6)';
+      lines.forEach((line, i) => g.fillText(line, p.x * K, (by + bs * .6) * K + i * size * 1.2));
+    }
+  }
+
+  // Open eyes follow the pointer; closed ones roll up.
+  drawEyes({ g, t, K, mix }) {
+    const { pointer, staring } = this, out = this.outsider?.visible && this.outsider;
+    for (const p of this.parts) {
+      const y = this.eyeY(p), open = staring ? 1 : Math.min(1, p.value / .12);
+      let tx = 0, ty = 0, tp = 1.35;   // staring: straight out, pupils wide
+      if (!staring && open > 0) {
+        [tx, ty] = pointer.has ? gazeToward(pointer.x, pointer.y, p.x, y, p.r) : [0, -.1];
+        tx += this.twitch(p, t);
+        if (out) {   // the fuller the room, the more the eyes turn to the outsider
+          const w = clamp((mix - .35) / .35), [ax, ay] = toward(out.ex - p.x, out.ey - y, .5);
+          tx = ease(tx, ax, w); ty = ease(ty, ay, w);
+        }
+        tx *= open; ty = ty * open - .95 * (1 - open); tp = 1 - p.signal * .35;   // half-open eyes are still rolling up
+      } else if (!staring) [tx, ty, tp] = [Math.sin(t * .0004 + p.phase) * .1, -.95, 1];
+      look(p.gaze, tx, ty, tp, open > 0 || staring ? .14 : .06);
+      drawKitEye(g, p.sclera, p.irisImg, p.x * K, y * K, p.r * K, p.gaze);
+    }
+  }
+}
+
+// ——— sequencer rooms: a row of eye pads per stem (up to four), a column per step, and a drum machine on top.
+// Pads cycle on → off → stutter. The drum machine starts empty.
+
+const DRUM_ROWS = [{ kind: 'kick', label: 'KICK', color: '#d9d4cc' }, { kind: 'hat', label: 'HAT', color: '#7fa7b5' }, { kind: 'snare', label: 'SNARE', color: '#c9a227' }];
+const DRUM_UNIT = { y: 300, height: 380, top: 330, rowPitch: 112 };   // art units
+const NEXT_STATE = { on: 'off', off: 'stutter', stutter: 'on' };
+const STUTTER = { repeats: 4, echo: .75 };   // slices per step; echo time in steps
+
+const SEQ = { x: 110, width: 860, top: 950, rowPitch: 215, header: 50, split: 12 };   // art units
+
+// Pad sprites: unlit, lit (with glow margin) or striped for stutter.
+const padSprite = memo(key => {
+  const [color, look] = key.split('|'), S = 128, M = look === 'lit' ? 16 : 0, [c, x] = makeCanvas(S + 2 * M);
+  x.beginPath(); x.roundRect(M, M, S, S, 18);
+  if (look === 'stutter') {
+    x.fillStyle = '#16171a'; x.fill();
+    x.save(); x.clip();
+    x.strokeStyle = color; x.lineWidth = 12; x.globalAlpha = .75;
+    x.beginPath();
+    for (let d = -S; d < S * 2; d += 30) { x.moveTo(d, 0); x.lineTo(d + S, S); }
+    x.stroke();
+    x.restore();
+    x.lineWidth = 4; x.strokeStyle = color; x.stroke();
+  } else if (look === 'lit') {
+    x.shadowColor = color; x.shadowBlur = 14;
+    x.fillStyle = color; x.fill();
+    x.shadowBlur = 0;
+    const sheen = x.createRadialGradient(M + S / 2, M + S * .35, 4, M + S / 2, M + S / 2, S * .75);
+    sheen.addColorStop(0, 'rgba(255,255,255,.4)'); sheen.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = sheen; x.fill();
+  } else {
+    const body = x.createLinearGradient(0, M, 0, M + S);
+    body.addColorStop(0, '#2a2c31'); body.addColorStop(1, '#121316');
+    x.fillStyle = body; x.fill();
+    x.lineWidth = 3; x.strokeStyle = color; x.globalAlpha = .35; x.stroke(); x.globalAlpha = 1;
+    x.beginPath(); x.roundRect(M + 4, M + 3, S - 8, S / 2, 14);
+    x.fillStyle = 'rgba(255,255,255,.04)'; x.fill();
+  }
+  return c;
+});
+
+// A lacquered unit with a steel rim and corner screws.
+function drawUnit(w, h) {
+  const [c, x] = makeCanvas(w, h);
+  x.beginPath(); x.roundRect(6, 6, w - 12, h - 12, 30);
+  const body = x.createLinearGradient(0, 0, 0, h);
+  body.addColorStop(0, '#1d1f23'); body.addColorStop(1, '#0b0c0e');
+  x.fillStyle = body; x.fill();
+  const rim = x.createLinearGradient(0, 0, w, h);
+  rim.addColorStop(0, '#6a6f76'); rim.addColorStop(.5, '#2a2d31'); rim.addColorStop(1, '#55595f');
+  x.lineWidth = 6; x.strokeStyle = rim; x.stroke();
+  for (const [sx, sy] of [[34, 34], [w - 34, 34], [34, h - 34], [w - 34, h - 34]]) {
+    const head = x.createRadialGradient(sx - 3, sy - 3, 1, sx, sy, 10);
+    head.addColorStop(0, '#9a9ea4'); head.addColorStop(1, '#3a3d42');
+    x.fillStyle = head; x.beginPath(); x.arc(sx, sy, 10, 0, TAU); x.fill();
+    x.strokeStyle = '#1a1b1e'; x.lineWidth = 2; x.beginPath(); x.moveTo(sx - 6, sy - 3); x.lineTo(sx + 6, sy + 3); x.stroke();
+  }
+  return [c, x];
+}
+// The sequencer panel, drawn once: 980 × 1160 art units at (50, 700).
+function drawPanel() {
+  const [c, x] = drawUnit(980, 1160);
+  x.fillStyle = '#07090a'; x.fillRect(60, 60, 860, 140);
+  x.strokeStyle = '#2b2f33'; x.lineWidth = 3; x.strokeRect(60, 60, 860, 140);
+  const glass = x.createLinearGradient(0, 60, 0, 200);
+  glass.addColorStop(0, 'rgba(255,255,255,.06)'); glass.addColorStop(.5, 'rgba(255,255,255,0)');
+  x.fillStyle = glass; x.fillRect(60, 60, 860, 140);
+  x.strokeStyle = 'rgba(255,255,255,.05)'; x.lineWidth = 2;
+  for (let r = 1; r < 4; r++) { const y = SEQ.top - 700 + r * SEQ.rowPitch - 18; x.beginPath(); x.moveTo(60, y); x.lineTo(920, y); x.stroke(); }
+  for (const [dx, color, len, w] of [[150, '#a3191e', 70, 14], [176, '#e6e2dc', 38, 9], [600, '#2f5f9a', 96, 16], [624, '#a3191e', 52, 10], [850, '#e6e2dc', 30, 9]]) {
+    x.fillStyle = color;
+    x.beginPath(); x.roundRect(dx - w / 2, 0, w, len, w / 2); x.fill();
+    x.beginPath(); x.arc(dx, len, w * .65, 0, TAU); x.fill();
+  }
+  return c;
+}
+
+class SequencerRoom extends Room {
+  static how = ['<b>Tap a square</b> to switch that eye off for its beat. <b>Tap again</b> to make it stutter and echo; a third tap brings it back.',
+                '<b>Drag across</b> to do the same to a run of squares.', '<b>Tap a name</b> to take the whole part out.',
+                '<b>The drum machine on top</b> is yours: tap its squares to add a kick, hat and snare.', '<b>Move</b> and the open eyes follow you.'];
+  static label = 'A sequencer of square pads, one row per part. Each pad is an eye: tap pads to silence or stutter that part on those beats.';
+
+  async prepare() {
+    const base = this.song.base, data = await fetchJSON(`${base}song.json`);
+    [this.room, this.paint] = await Promise.all([kit(`room-${data.room}.jpg`), kit(`paint-${data.paint}.webp`)]);
+    Object.assign(this, { bpm: data.bpm, steps: data.steps, stepTime: 60 / data.bpm * data.step_beats, ticker: data.ticker.map(w => w.toUpperCase()) });
+    const pitch = (SEQ.width - SEQ.split) / this.steps, size = pitch - 12;
+    this.padSize = size;
+    this.parts = await Promise.all(data.channels.map(async (c, i) => {
+      const top = SEQ.top + i * SEQ.rowPitch;
+      return {
+        ...newPart(c, i, i * 1.3), top,
+        sclera: await kit(`sclera-${c.sclera}.webp`), iris: await kit(`iris-${c.iris}.webp`), badgeImg: await badge(c.badge),
+        sprites: { off: padSprite(`${c.color}|`), on: padSprite(`${c.color}|lit`), stutter: padSprite(`${c.color}|stutter`) },
+        pads: Array.from({ length: this.steps }, (_, s) => ({
+          state: 'on', x: SEQ.x + s * pitch + (s >= this.steps / 2 ? SEQ.split : 0) + 6, y: top + SEQ.header + 10,
+          gaze: { ox: 0, oy: -.95, pup: 1 }, phase: i * 1.3 + s * .7, twitch: 0 })),
+      };
+    }));
+    this.stemUrls = data.channels.map(c => base + c.audio);
+    this.panel = drawPanel();
+    [this.drumUnit] = drawUnit(980, DRUM_UNIT.height);
+    const [drumSclera, drumIris] = await Promise.all([kit('sclera-1.webp'), kit('iris-grey.webp')]);
+    this.drums = DRUM_ROWS.map((row, i) => ({
+      ...row, sclera: drumSclera, iris: drumIris,
+      sprites: { off: padSprite(`${row.color}|`), on: padSprite(`${row.color}|lit`) },
+      pads: this.parts[0].pads.map((p, s) => ({ state: 'off', x: p.x, y: DRUM_UNIT.top + i * DRUM_UNIT.rowPitch, gaze: { ox: 0, oy: -.95, pup: 1 }, phase: i * 2.1 + s * .9, twitch: 0 })),
+    }));
+  }
+
+  // ——— the pattern
+  setPad(pad, state) {
+    if (pad.state === state) return;
+    pad.state = state;
+    this.replan = true;
+    this.stir();
+  }
+  wakeAll() {   // back to the record: every stem pad on, the drum machine cleared
+    for (const p of this.parts) for (const pad of p.pads) this.setPad(pad, 'on');
+    this.clearDrums();
+    super.wakeAll();
+  }
+  sleepAll() {
+    this.clearDrums();
+    super.sleepAll();
+  }
+  clearDrums() { for (const d of this.drums) for (const pad of d.pads) this.setPad(pad, 'off'); }
+
+  // ——— timing: gates scheduled just ahead on the audio clock
+  start() {
+    return super.start().then(() => {
+      this.clock ??= setInterval(() => this.schedule(), 25);
+      this.schedule();
+    });
+  }
+  destroy() {
+    clearInterval(this.clock);
+    super.destroy();
+  }
+  schedule() {
+    const m = this.mixer;
+    if (!m || m.seeking || m.stopped) return;
+    const now = m.ctx.currentTime, horizon = now + (document.hidden ? 1.5 : .12);   // background tabs tick rarely
+    m.prune();
+    const slice = this.stepTime / STUTTER.repeats;
+    const set = (step, at, cuts = true) => {
+      for (const p of this.parts) {
+        const { state } = p.pads[step % this.steps];
+        m.gate(p.i).setTargetAtTime(state === 'on' ? 1 : 0, at, .004);
+        if (cuts && state === 'stutter') m.stutter(p.i, step * this.stepTime, at, slice, STUTTER.repeats, this.stepTime * STUTTER.echo);
+      }
+      if (cuts) for (const d of this.drums) if (d.pads[step % this.steps].state === 'on') m.drum(d.kind, at);
+    };
+    if (this.replan || this.anchor !== m.startedAt) {   // after a seek or pattern change
+      this.replan = false;
+      this.anchor = m.startedAt;
+      const elapsed = Math.max(0, now - m.startedAt), loops = Math.floor(elapsed / m.duration), step = Math.floor((elapsed - loops * m.duration) / this.stepTime);
+      this.loopStart = m.startedAt + loops * m.duration;
+      for (const p of this.parts) m.gate(p.i).cancelScheduledValues(now);
+      m.cancelCuts(now);
+      const stepStart = this.loopStart + step * this.stepTime;
+      if (stepStart >= now) set(step, stepStart);   // not begun: play it in full
+      else set(step, now, false);                   // under way: gates only
+      this.next = step + 1;
+    }
+    for (;;) {
+      if (this.next * this.stepTime >= m.duration) { this.loopStart += m.duration; this.next = 0; }   // loop
+      const at = this.loopStart + this.next * this.stepTime;
+      if (at > horizon) break;
+      set(this.next++, at);
+    }
+  }
+
+  // ——— input: tap a pad to change it, drag to paint, tap a row name to mute
+  hit({ x, y }) {
+    const size = this.padSize, inside = pad => x >= pad.x - 4 && x <= pad.x + size + 4 && y >= pad.y - 4 && y <= pad.y + size + 4;
+    for (const d of this.drums) for (const pad of d.pads) if (inside(pad)) return { pad, drum: true };
+    for (const part of this.parts) {
+      if (y >= part.top && y < part.top + SEQ.header && x >= SEQ.x && x <= SEQ.x + SEQ.width) return { part };
+      for (const pad of part.pads) if (inside(pad)) return { part, pad };
+    }
+    return null;
+  }
+  grabs(p) { return !!this.hit(p); }
+  press(p) {
+    const hit = this.hit(p);
+    if (!hit) return false;
+    if (hit.pad) {
+      this.painting = hit.drum ? (hit.pad.state === 'on' ? 'off' : 'on') : NEXT_STATE[hit.pad.state];
+      this.paintingDrums = !!hit.drum;
+      this.setPad(hit.pad, this.painting);
+      this.begin();
+    }
+    else this.begin().then(() => this.toggle(hit.part));
+    return true;
+  }
+  drag(p) {
+    if (this.painting === undefined) return;
+    const hit = this.hit(p);
+    if (hit?.pad && !!hit.drum === this.paintingDrums) this.setPad(hit.pad, this.painting);   // drum and stem rows paint separately
+  }
+  release() { this.painting = undefined; }
+
+  // ——— drawing
+  draw({ g, t, W, H, K }) {
+    const pos = this.mixer?.heard, step = pos === undefined ? -1 : Math.floor(pos / this.stepTime) % this.steps;
+    const strobe = pos !== undefined && Math.floor(pos / this.stepTime * STUTTER.repeats) % 2 === 0;   // in time with the slices
+    g.drawImage(this.room, 0, 0, W, H);
+    g.drawImage(this.paint, 0, 0, W, H);
+    g.drawImage(this.panel, 50 * K, 700 * K, 980 * K, 1160 * K);
+    g.drawImage(this.drumUnit, 50 * K, DRUM_UNIT.y * K, 980 * K, DRUM_UNIT.height * K);
+    this.drawDisplay(g, K, pos, step);
+    const size = this.padSize, glow = size * 160 / 128, r = size * .34;
+    if (step >= 0) {   // the playhead, through both machines
+      const x = (this.parts[0].pads[step].x - 6) * K, w = (size + 12) * K;
+      g.fillStyle = 'rgba(255,255,255,.05)';
+      g.fillRect(x, (SEQ.top - 8) * K, w, (this.parts.length * SEQ.rowPitch - 10) * K);
+      g.fillRect(x, (DRUM_UNIT.top - 8) * K, w, (DRUM_UNIT.rowPitch * DRUM_ROWS.length - 2) * K);
+    }
+    g.textAlign = 'center';
+    g.font = `500 ${17 * K}px "IBM Plex Mono",monospace`;
+    for (const d of this.drums) {
+      g.fillStyle = d.pads.some(p => p.state === 'on') ? d.color : 'rgba(190,196,204,.45)';
+      g.fillText(d.label, 80 * K, (d.pads[0].y + size / 2 + 5) * K);
+      for (const [s, pad] of d.pads.entries()) {
+        const on = pad.state === 'on', beat = s === step, cx = pad.x + size / 2, cy = pad.y + size / 2;
+        g.drawImage(d.sprites.off, pad.x * K, pad.y * K, size * K, size * K);
+        if (on) {
+          g.globalAlpha = beat ? 1 : .38;
+          g.drawImage(d.sprites.on, (cx - glow / 2) * K, (cy - glow / 2) * K, glow * K, glow * K);
+          g.globalAlpha = 1;
+        }
+        this.aim(pad, pad.state, beat, beat && on ? .8 : 0, cx, cy, r * .9, t);
+        drawKitEye(g, d.sclera, d.iris, cx * K, cy * K, r * .9 * K, pad.gaze);
+      }
+    }
+    g.textAlign = 'left';
+    g.font = `500 ${24 * K}px "IBM Plex Mono",monospace`;
+    for (const part of this.parts) {
+      const live = part.value > ON;
+      g.drawImage(part.badgeImg, (SEQ.x - 6) * K, (part.top - 4) * K, 52 * K, 52 * K);
+      g.fillStyle = live ? part.color : 'rgba(190,196,204,.45)';
+      g.fillText(part.label.toUpperCase(), (SEQ.x + 56) * K, (part.top + 32) * K);
+      for (const [s, pad] of part.pads.entries()) {
+        const state = live ? pad.state : 'off', beat = s === step, cx = pad.x + size / 2, cy = pad.y + size / 2;
+        g.drawImage(part.sprites[state === 'stutter' ? 'stutter' : 'off'], pad.x * K, pad.y * K, size * K, size * K);
+        if (state === 'on' || (state === 'stutter' && beat && strobe)) {
+          g.globalAlpha = beat ? Math.min(1, .75 + part.signal) : .38;
+          g.drawImage(part.sprites.on, (cx - glow / 2) * K, (cy - glow / 2) * K, glow * K, glow * K);
+          g.globalAlpha = 1;
+        }
+        this.aim(pad, state, beat, part.signal, cx, cy, r, t);
+        drawKitEye(g, part.sclera, part.iris, cx * K, cy * K, r * K, pad.gaze);
+      }
+    }
+  }
+  // Pad eye: follows the pointer, reacts on its beat, shakes on a stutter.
+  aim(pad, state, onBeat, signal, x, y, r, t) {
+    const { pointer, staring } = this, open = state !== 'off';
+    let tx = 0, ty = 0, tp = 1.35;
+    if (!staring && open) {
+      [tx, ty] = pointer.has ? gazeToward(pointer.x, pointer.y, x, y, r) : [0, -.1];
+      tx += this.twitch(pad, t);
+      if (state === 'stutter' && onBeat && !reduceMotion) tx += Math.sin(t * .12) * .3;
+      tp = 1 - signal * (onBeat ? .5 : .2);
+    } else if (!staring) [tx, ty, tp] = [Math.sin(t * .0004 + pad.phase) * .1, -.95, 1];
+    look(pad.gaze, tx, ty, tp, open || staring ? .14 : .06);
+  }
+  // Display: one lyric phrase per bar, a light per step.
+  drawDisplay(g, K, pos, step) {
+    const bar = pos === undefined ? 0 : Math.floor(pos / (this.stepTime * this.steps));
+    g.textAlign = 'center';
+    g.fillStyle = '#ffb347';
+    g.shadowColor = 'rgba(255,150,40,.6)';
+    g.shadowBlur = 12 * K;
+    g.font = `500 ${44 * K}px "IBM Plex Mono",monospace`;
+    g.fillText(this.ticker[bar % this.ticker.length], 540 * K, 852 * K);
+    g.shadowBlur = 0;
+    g.fillStyle = 'rgba(255,179,71,.55)';
+    g.font = `500 ${17 * K}px "IBM Plex Mono",monospace`;
+    g.textAlign = 'left'; g.fillText(`BAR ${String(bar + 1).padStart(3, '0')}`, 130 * K, 792 * K);
+    g.textAlign = 'right'; g.fillText(`${this.bpm} BPM`, 950 * K, 792 * K);
+    for (let s = 0; s < this.steps; s++) {
+      g.fillStyle = s === step ? '#ffb347' : 'rgba(255,179,71,.15)';
+      g.fillRect((540 - this.steps * 14 + s * 28 + 6) * K, 874 * K, 16 * K, 8 * K);
+    }
+  }
+}
+
+// ——— fader-room effects ———————————————————————————————————————————————————————————————————————————————————
+// Chosen per song in song.json. Hooks: update, light (over the room), scene (behind the desk), front, sleep.
+// mix runs from 0 (all faders down) to 1 (record level).
+
+// The room fades to its empty version as the mix empties.
+class EmptyRoom {
+  amount = 1;
+  constructor(room, data) { this.name = data.room_empty; }
+  async load() { this.img = await kit(`room-${this.name}.jpg`); }
+  update({ mix }) { this.amount = ease(this.amount, clamp((.62 - mix) / .55) * .96, .02); }
+  light({ g, W, H }) {
+    if (this.amount < .003) return;
+    g.globalAlpha = this.amount; g.drawImage(this.img, 0, 0, W, H); g.globalAlpha = 1;
+  }
+}
+
+// A figure from another song kneels on the desk, turns to dust as the room empties, and his eye glows with the vocal.
+class Ghost {
+  gone = 1;
+  gaze = { ox: 0, oy: 0, pup: 1 };
+  constructor(room, data) { this.room = room; this.o = data.ghost; }
+  async load() {
+    const o = this.o, base = songBase(o.song, this.room.song.base);
+    const [figure, iris] = await Promise.all([loadImage(`${base}${o.figure}.webp`), loadImage(base + (o.iris ?? 'iris-1.webp'))]);
+    const { width: w, height: h } = figure, [img, x] = makeCanvas(w, h);
+    x.drawImage(figure, 0, 0);
+    const alpha = x.getImageData(0, 0, w, h).data;
+    // as few motes as still look solid
+    for (let step = 3; ; step++) {
+      const half = step >> 1, motes = [];
+      for (let y = 0; y + half < h; y += step) for (let x0 = 0; x0 + half < w; x0 += step)
+        if (alpha[((y + half) * w + x0 + half) * 4 + 3] > 140) motes.push({ x: x0, y });
+      if (motes.length < 4200 || step >= 9) { this.motes = motes; this.step = step; break; }
+    }
+    for (const m of this.motes) {
+      const low = 1 - m.y / h;
+      Object.assign(m, { at: .62 * Math.random() + .38 * low, dx: (Math.random() - .5) * 190, dy: -(140 + Math.random() * 420) * (.6 + .4 * low), ph: Math.random() * TAU });
+    }
+    this.img = img;
+    this.iris = iris;
+    this.voice = this.room.parts.find(p => p.badge === 'vocal');
+  }
+  update({ mix }) {
+    const target = clamp((.8 - mix) / .65);
+    this.gone = ease(this.gone, target, target > this.gone ? .011 : .016);
+  }
+  scene({ g, t, K }) {
+    const { o, img, gone } = this, s = o.scale, X = o.x, Y = o.y;
+    const solid = reduceMotion ? 1 - gone : Math.max(0, 1 - gone * 1.9);
+    if (solid > .003) { g.globalAlpha = solid; g.drawImage(img, X * K, Y * K, img.width * s * K, img.height * s * K); }
+    if (!reduceMotion && gone > .004) {
+      const st = this.step, size = st * s * K * 1.2;
+      for (const m of this.motes) {
+        const away = clamp((gone * 1.4 - m.at) / .4);
+        const a = away > 0 ? (1 - away) * (away < .15 ? 1 : 1 - (away - .15) * .4) : 1 - solid;
+        if (a < .01) continue;
+        const e = away * away;
+        g.globalAlpha = a;
+        g.drawImage(img, m.x, m.y, st, st, (X + m.x * s + m.dx * e + Math.sin(t * .0011 + m.ph) * 18 * away) * K, (Y + m.y * s + m.dy * e) * K, size, size);
+      }
+    }
+    g.globalAlpha = 1;
+
+    const er = o.eye_r * s, ex = X + o.eye_x * s, ey = Y + o.eye_y * s, eyeA = clamp(1 - (gone - .72) / .2);
+    const v = this.voice, voice = v && v.value > ON ? v.signal : 0;
+    if (voice > .02 && eyeA > 0) {
+      const glow = g.createRadialGradient(ex * K, ey * K, er * .2 * K, ex * K, ey * K, er * 2.6 * K);
+      glow.addColorStop(0, `rgba(255,170,90,${.32 * voice * eyeA})`);
+      glow.addColorStop(1, 'rgba(255,120,40,0)');
+      g.globalCompositeOperation = 'lighter';
+      g.fillStyle = glow; g.fillRect((ex - er * 3) * K, (ey - er * 3) * K, er * 6 * K, er * 6 * K);
+      g.globalCompositeOperation = 'source-over';
+    }
+    const { pointer, staring } = this.room, [tx, ty] = !staring && pointer.has ? gazeToward(pointer.x, pointer.y, ex, ey, er) : [0, 0];
+    look(this.gaze, tx, ty, staring ? 1.35 : 1 - voice * .3, .08);
+    if (eyeA > .01) { g.globalAlpha = eyeA; drawIris(g, this.iris, ex * K, ey * K, er * K, this.gaze); g.globalAlpha = 1; }
+  }
+}
+
+// A dark silhouette with one red eye; he sinks as the mix fills and the other eyes turn to him.
+class Outsider {
+  sink = 0;
+  gaze = { ox: 0, oy: 0, pup: 1.1 };
+  constructor(room, data) { this.room = room; this.o = data.outsider; this.r = 64 * this.o.scale; }
+  async load() {
+    const o = this.o, figure = await loadImage(`${songBase(o.song, this.room.song.base)}${o.figure}.webp`);
+    const [img, x] = makeCanvas(figure.width, figure.height);
+    x.drawImage(figure, 0, 0);
+    x.globalCompositeOperation = 'source-atop';
+    x.fillStyle = 'rgba(14,6,3,.9)'; x.fillRect(0, 0, img.width, img.height);
+    const kitIris = this.room.iris, [iris, ix] = makeCanvas(256);
+    ix.drawImage(kitIris, 0, 0, 256, 256);
+    ix.globalCompositeOperation = 'multiply'; ix.fillStyle = '#ff2a18'; ix.fillRect(0, 0, 256, 256);
+    ix.globalCompositeOperation = 'destination-in'; ix.drawImage(kitIris, 0, 0, 256, 256);
+    Object.assign(this, { img, iris, sclera: await kit(`sclera-${o.sclera ?? 3}.webp`) });
+  }
+  update({ mix }) {
+    const o = this.o, s = o.scale;
+    this.sink = ease(this.sink, clamp((mix - .15) / .7), .015);
+    this.y = o.y + this.sink * o.sink;
+    this.ex = o.x + (o.eye_x - o.fig_x) * s;
+    this.ey = this.y + (o.eye_y - o.fig_y) * s;
+    this.visible = this.ey < 1010;   // above the desk
+  }
+  scene({ g, K }) {
+    const { o, img, room: { pointer } } = this, s = o.scale;
+    g.drawImage(img, o.x * K, this.y * K, img.width * s * K, img.height * s * K);
+    const [tx, ty] = pointer.has ? gazeToward(pointer.x, pointer.y, this.ex, this.ey, this.r, .1) : [0, 0];
+    look(this.gaze, tx, ty, 1.1, .05);
+    if (this.visible) drawKitEye(g, this.sclera, this.iris, this.ex * K, this.ey * K, this.r * K, this.gaze);
+  }
+}
+
+// Rising sparks; fewer while the outsider is sunk.
+class Embers {
+  constructor(room) {
+    this.room = room;
+    this.sparks = Array.from({ length: 90 }, () => ({ x: Math.random() * 1080, y: 1000 + Math.random() * 900, v: .6 + Math.random() * 1.6, s: 1.5 + Math.random() * 3, p: Math.random() * 6 }));
+  }
+  scene({ g, t, K }) {
+    if (reduceMotion) return;
+    const out = this.room.outsider, n = Math.floor(this.sparks.length * (out ? .2 + .8 * (1 - out.sink) : .6));
+    g.globalCompositeOperation = 'lighter';
+    for (let i = 0; i < n; i++) {
+      const e = this.sparks[i];
+      e.y -= e.v;
+      e.x += Math.sin(t * .001 + e.p) * .4;
+      if (e.y < 300) { e.y = 1050 + Math.random() * 700; e.x = Math.random() * 1080; }
+      g.fillStyle = `rgba(255,${120 + Math.floor(60 * Math.sin(e.p + t * .003))},40,${.55 * clamp((e.y - 300) / 500)})`;
+      g.beginPath(); g.arc(e.x * K, e.y * K, e.s * K, 0, TAU); g.fill();
+    }
+    g.globalCompositeOperation = 'source-over';
+  }
+}
+
+// Firelight flicker.
+class Flicker {
+  scene({ g, t, W, H }) {
+    if (reduceMotion) return;
+    const a = .07 + .04 * Math.sin(t * .011) + .03 * Math.sin(t * .029 + 1.3) + (Math.random() < .05 ? .04 : 0);
+    g.fillStyle = `rgba(18,7,2,${Math.max(0, a)})`;
+    g.fillRect(0, 0, W, H);
+  }
+}
+
+// A sleeping eye leaves a pale copy that floats up.
+class Afterimages {
+  ghosts = [];
+  constructor(room) { this.room = room; }
+  sleep(p) {
+    if (!reduceMotion && this.ghosts.length < 24)
+      this.ghosts.push({ p, x: p.x, y: this.room.eyeY(p), born: performance.now(), ox: p.gaze.ox, oy: p.gaze.oy });
+  }
+  front({ g, t, K }) {
+    if (!this.ghosts.length) return;
+    this.ghosts = this.ghosts.filter(a => t - a.born < 2600);
+    for (const { p, x, y, born, ox, oy } of this.ghosts) {
+      const age = (t - born) / 2600, rise = 1 - (1 - age) ** 2;
+      g.globalAlpha = .6 * (1 - age) ** 1.6;
+      drawKitEye(g, p.sclera, p.irisImg, (x + Math.sin(age * 5 + p.phase) * 14 * age) * K, (y - rise * 300) * K, p.r * (1 + age * .6) * K,
+        { ox: ox * (1 - age), oy: oy * (1 - age) - .3 * age, pup: 1 + age * .8 });
+    }
+    g.globalAlpha = 1;
+  }
+}
+
+// Rain with the mix, rare lightning on drum hits; with 'clearing', the empty room clears to dawn.
+class Weather {
+  storm = 0;
+  flashUntil = 0;
+  lastFlash = 0;
+  constructor(room, data) {
+    this.room = room;
+    this.clearName = data.effects.includes('clearing') && data.room_clear;
+    this.drops = Array.from({ length: 420 }, () => ({ x: Math.random() * 1200 - 60, y: Math.random() * 1920, v: 22 + Math.random() * 26, len: 28 + Math.random() * 46 }));
+  }
+  async load() { if (this.clearName) this.clear = await kit(`room-${this.clearName}.jpg`); }
+  update({ mix }) { this.storm = ease(this.storm, Math.min(1, mix * 1.8), .02); }
+  light({ g, W, H }) {
+    if (!this.clear) return;
+    g.globalAlpha = 1 - this.storm; g.drawImage(this.clear, 0, 0, W, H); g.globalAlpha = 1;
+  }
+  scene({ g, K }) {
+    const s = this.storm;
+    if (reduceMotion || s <= .02) return;
+    g.strokeStyle = `rgba(200,215,230,${.1 + .22 * s})`;
+    g.lineWidth = Math.max(1, 1.6 * K);
+    g.lineCap = 'round';
+    g.beginPath();
+    for (let i = 0, n = Math.floor(this.drops.length * s); i < n; i++) {
+      const d = this.drops[i];
+      d.y += d.v * (.6 + .4 * s);
+      d.x -= d.v * .18;
+      if (d.y > 1920) { d.y = -d.len; d.x = Math.random() * 1200 - 60; }
+      g.moveTo(d.x * K, d.y * K);
+      g.lineTo((d.x + d.len * .18) * K, (d.y - d.len) * K);
+    }
+    g.stroke();
+  }
+  front({ g, t, W, H }) {
+    const drums = this.room.parts[0];
+    if (!reduceMotion && this.storm > .6 && drums.signal > .55 && t - this.lastFlash > 7000 && Math.random() < .15) {
+      this.flashUntil = t + 110;
+      this.lastFlash = t;
+    }
+    if (t < this.flashUntil) { g.fillStyle = `rgba(225,232,245,${.22 * this.storm})`; g.fillRect(0, 0, W, H); }
+  }
+}
+
+// Colour comes in with the parts: empty, the room is grey; each part floods it with its own colour,
+// and the colour climbs from the floor to the ceiling as the mix fills.
+class Colour {
+  level = 0;
+  constructor(room) { this.room = room; }
+  async load() {
+    const [grey, x] = makeCanvas(540, 960);
+    x.drawImage(this.room.room, 0, 0, 540, 960);
+    const img = x.getImageData(0, 0, 540, 960), d = img.data;
+    for (let k = 0; k < d.length; k += 4) d[k] = d[k + 1] = d[k + 2] = (d[k] * .3 + d[k + 1] * .59 + d[k + 2] * .11) * .85;
+    x.putImageData(img, 0, 0);
+    this.grey = grey;
+    this.blob = memo(color => {
+      const [c, b] = makeCanvas(256), grad = b.createRadialGradient(128, 128, 0, 128, 128, 128);
+      grad.addColorStop(0, color); grad.addColorStop(.45, `${color}aa`); grad.addColorStop(1, `${color}00`);
+      b.fillStyle = grad; b.fillRect(0, 0, 256, 256);
+      return c;
+    });
+  }
+  update({ mix }) { this.level = ease(this.level, mix, .03); }
+  light({ g, t, W, H, K }) {
+    const lv = this.level, s = reduceMotion ? 0 : t * .00012;
+    g.globalAlpha = clamp(1 - lv * 1.6);
+    if (g.globalAlpha > .003) g.drawImage(this.grey, 0, 0, W, H);
+    const n = this.room.parts.length;
+    for (const p of this.room.parts) {
+      const amount = clamp(p.value / MIX), img = this.blob(p.color);
+      if (amount < .01) continue;
+      for (let j = 0; j < 3; j++) {   // each part keeps to its own stretch of wall, so the colours stay apart
+        const ph = p.phase + j * 2.1, home = (p.i + .5) / n * 1080;
+        const x = home + Math.sin(s * (1 + j * .35) + ph) * 160, y = 1500 - lv * 1050 + j * 260 + Math.cos(s * 1.2 + ph * 1.7) * 140;
+        const r = (230 + 60 * j) * (.6 + .4 * amount) * (1 + p.signal * .5);
+        g.globalCompositeOperation = 'color'; g.globalAlpha = .7 * amount;
+        g.drawImage(img, (x - r) * K, (y - r) * K, 2 * r * K, 2 * r * K);
+        g.globalCompositeOperation = 'screen'; g.globalAlpha = (.12 + .35 * p.signal) * amount;
+        g.drawImage(img, (x - r * .7) * K, (y - r * .7) * K, 1.4 * r * K, 1.4 * r * K);
+      }
+    }
+    g.globalCompositeOperation = 'source-over';
+    g.globalAlpha = 1;
+  }
+}
+
+// in drawing order
+const EFFECTS = [['colour', Colour], ['fade', EmptyRoom], ['dissolve', Ghost], ['outsider', Outsider], ['embers', Embers], ['flicker', Flicker], ['afterimage', Afterimages], ['rain', Weather]];
+
+const ROOMS = { faders: FaderRoom, sequencer: SequencerRoom };
+
+// ——— way-in screen ————————————————————————————————————————————————————————————————————————————————————————
+// The empty room, one big eye (tap it to start the album) and the track list.
+// The tap that picks a song also unlocks audio, so the room then starts by itself.
+
+const LOBBY_EYE = { x: 540, y: 500, r: 230 };   // in the room picture's 1080 × 1920 units
+const LOBBY_LINES = ['go on, then', 'any of them', 'we can wait'];
+
+class Lobby {
+  gaze = { ox: 0, oy: 0, pup: 1 };
+  pointer = null;          // { x, y, at } in page coordinates
+  focus = null;            // the door being looked at
+  blinkAt = -1e4; nextBlink = 2500; nextGlance = 0; glance = [0, 0];
+  lastMove = performance.now(); line = 0;
+
+  constructor(app) {
+    this.app = app;
+    this.g = ui.lobbyCanvas.getContext('2d');
+    this.art = Promise.all(['room-night-spotlight.jpg', 'sclera-1.webp', 'iris-blue.webp'].map(kit))
+      .then(([room, sclera, iris]) => Object.assign(this, { room, sclera, iris })).catch(console.error);
+    this.buildDoors();
+    const moved = e => { this.pointer = { x: e.clientX, y: e.clientY, at: performance.now() }; this.stir(); };
+    ui.lobby.addEventListener('pointermove', moved);
+    ui.lobby.addEventListener('pointerdown', moved);
+    ui.lobby.addEventListener('scroll', () => this.stir(), { passive: true });
+    // tapping the eye starts the album at track 1
+    const onEye = e => { const b = ui.lobbyCanvas.getBoundingClientRect(), [x, y, r] = this.eye ?? [0, 0, 0];
+      return Math.hypot(e.clientX - b.left - x, e.clientY - b.top - y) < r * 1.05; };
+    ui.lobbyCanvas.addEventListener('click', e => onEye(e) && this.choose(ORDER[0]));
+    ui.lobbyCanvas.addEventListener('pointermove', e => {
+      this.hover = onEye(e);
+      ui.lobbyCanvas.classList.toggle('on-eye', this.hover);
+    });
+    ui.lobbyCanvas.addEventListener('pointerleave', () => { this.hover = false; });
+    ui.beginBtn.onclick = () => this.choose(ORDER[0]);
+    if (!matchMedia('(pointer:coarse)').matches) ui.beginBtn.textContent = 'Click the eye to begin';
+  }
+
+  buildDoors() {
+    ui.doors.replaceChildren(...ORDER.map(key => {
+      const song = SONGS[key], li = document.createElement('li'), row = document.createElement('button');
+      row.innerHTML = '<span class="n"></span><span class="t"></span><span class="d"></span>';
+      row.querySelector('.n').textContent = pad2(song.track);
+      row.querySelector('.t').textContent = song.title;
+      row.querySelector('.d').textContent = song.dur;
+      row.onclick = () => this.choose(key);
+      const look = () => { this.focus = row; this.stir(); }, away = () => { if (this.focus === row) this.focus = null; };
+      row.addEventListener('pointerenter', look);
+      row.addEventListener('focus', look);
+      row.addEventListener('pointerleave', away);
+      row.addEventListener('blur', away);
+      li.append(row);
+      return li;
+    }));
+    const words = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine', 'Ten', 'Eleven', 'Twelve'];
+    ui.moreRooms.textContent = SHUT.length ? `${words[SHUT.length] ?? SHUT.length} more ${SHUT.length > 1 ? 'rooms' : 'room'} to come.` : '';
+  }
+
+  get isOpen() { return !ui.lobby.hidden && !ui.lobby.classList.contains('gone'); }
+
+  open() {
+    clearTimeout(this.hiding);
+    this.closing = null;
+    ui.lobby.hidden = false;
+    ui.lobby.classList.remove('gone');
+    ui.wrap.inert = true;
+    this.stir();
+    if (!this.running) { this.running = true; requestAnimationFrame(t => this.frame(t)); }
+  }
+  close() {
+    ui.lobby.classList.add('gone');
+    ui.wrap.inert = false;
+    this.hiding = setTimeout(() => { ui.lobby.hidden = true; this.running = false; }, reduceMotion ? 0 : 700);
+  }
+
+  // Picks a song; audio is resumed inside the tap so phones allow it.
+  choose(key) {
+    audioContext().resume();
+    const { app } = this;
+    app.entered = true;
+    this.focus = null;
+    this.closing = performance.now();   // eye shuts, then the screen fades
+    setTimeout(() => this.close(), reduceMotion ? 0 : 260);
+    if (key !== app.key) app.go(key);
+    else if (!ui.enterBtn.hidden && !ui.enterBtn.disabled) ui.enterBtn.click();
+  }
+
+  stir() {
+    this.lastMove = performance.now();
+    if (this.staring) { this.staring = false; ui.lobbyWhisper.classList.remove('on'); }
+  }
+
+  frame(t) {
+    if (!this.running) return;
+    requestAnimationFrame(t => this.frame(t));
+    const cv = ui.lobbyCanvas, box = cv.getBoundingClientRect(), DPR = Math.min(2, devicePixelRatio || 1);
+    if (!box.width) return;
+    const w = Math.round(box.width * DPR), h = Math.round(box.height * DPR);
+    if (cv.width !== w || cv.height !== h) Object.assign(cv, { width: w, height: h });
+    const { g } = this, W = box.width, H = box.height;
+    g.setTransform(DPR, 0, 0, DPR, 0, 0);
+    g.fillStyle = '#0d0e10';
+    g.fillRect(0, 0, W, H);
+    if (!this.room) return;
+
+    // room picture, cover-fitted from the top; the eye hangs above the floor
+    const K = Math.max(W / 1080, H / 1920), left = (W - 1080 * K) / 2;
+    g.drawImage(this.room, left, 0, 1080 * K, 1920 * K);
+    const x = left + LOBBY_EYE.x * K, y = LOBBY_EYE.y * K, r = LOBBY_EYE.r * K;
+    this.eye = [x, y, r];
+    const below = `${Math.round(y + r + 22)}px`;
+    if (ui.beginBtn.style.top !== below) ui.beginBtn.style.top = below;
+
+    // gaze: the eye itself under the pointer, a hovered song, the pointer, or idle glances; stares when left alone
+    const idle = t - this.lastMove, staring = idle > IDLE_MS * .8 && !this.focus;
+    if (staring !== !!this.staring) {
+      this.staring = staring;
+      if (staring) ui.lobbyWhisper.textContent = LOBBY_LINES[this.line++ % LOBBY_LINES.length];
+      ui.lobbyWhisper.classList.toggle('on', staring);
+    }
+    let ox, oy, pup = 1;
+    const at = this.hover ? null : this.focus?.getBoundingClientRect() ?? (this.pointer && t - this.pointer.at < 4000 && { left: this.pointer.x, top: this.pointer.y, width: 0, height: 0 });
+    if (staring || this.hover) [ox, oy, pup] = [0, 0, this.hover ? 1.4 : .75];
+    else if (at) {
+      [ox, oy] = gazeToward(at.left + at.width / 2 - box.left, at.top + at.height / 2 - box.top, x, y, r);
+      if (this.focus) pup = 1.35;
+    } else {
+      if (t > this.nextGlance && !reduceMotion) {   // look around the room now and then
+        this.glance = Math.random() < .35 ? [0, 0] : [(Math.random() - .5) * .8, (Math.random() - .35) * .6];
+        this.nextGlance = t + 1400 + Math.random() * 2600;
+      }
+      [ox, oy] = this.glance;
+    }
+    look(this.gaze, ox, oy, pup, at ? .14 : .06);
+
+    g.globalAlpha = .22;
+    g.drawImage(GLOW, x - r * 1.6, y - r * 1.6, r * 3.2, r * 3.2);
+    g.globalAlpha = 1;
+    drawKitEye(g, this.sclera, this.iris, x, y, r, this.gaze);
+
+    // lids: slightly lowered at rest, open when interested, narrowed when staring, shut on leaving
+    if (t > this.nextBlink) { this.blinkAt = t; this.nextBlink = t + 2500 + Math.random() * 5000; }
+    const blink = t - this.blinkAt < 170 ? Math.sin(Math.PI * (t - this.blinkAt) / 170) : 0;
+    const rest = this.focus || this.hover ? 0 : staring ? .3 : .12;
+    this.lid = ease(this.lid ?? rest, rest, .08);
+    const shut = this.closing ? clamp((t - this.closing) / 200) : 0;
+    this.drawLids(g, x, y, r, Math.max(this.lid, blink, shut));
+
+    const v = g.createRadialGradient(W / 2, H * .45, W * .3, W / 2, H * .45, H * .8);
+    v.addColorStop(0, 'rgba(0,0,0,0)');
+    v.addColorStop(1, 'rgba(0,0,0,.45)');
+    g.fillStyle = v;
+    g.fillRect(0, 0, W, H);
+  }
+
+  // Upper and lower lids, clipped to the eye; closed 0…1.
+  drawLids(g, x, y, r, closed) {
+    if (closed < .01) return;
+    const sag = r * .35 * (1 - closed), top = y - r * 1.4 + closed * r * 1.55, bottom = y + r * 1.4 - closed * r * 1.25;
+    g.save();
+    g.beginPath(); g.arc(x, y, r * .985, 0, TAU); g.clip();
+    g.fillStyle = '#0c0c0e';
+    g.strokeStyle = 'rgba(0,0,0,.9)';
+    g.lineWidth = Math.max(1.5, r * .03);
+    for (const [edge, out, bend] of [[top, -1, -1], [bottom, 1, 1]]) {
+      g.beginPath();
+      g.moveTo(x - r * 1.1, edge - bend * sag);
+      g.quadraticCurveTo(x, edge + bend * sag, x + r * 1.1, edge - bend * sag);
+      g.lineTo(x + r * 1.1, y + out * r * 1.1);
+      g.lineTo(x - r * 1.1, y + out * r * 1.1);
+      g.closePath();
+      g.fill();
+      g.beginPath();
+      g.moveTo(x - r * 1.1, edge - bend * sag);
+      g.quadraticCurveTo(x, edge + bend * sag, x + r * 1.1, edge - bend * sag);
+      g.stroke();
+    }
+    g.restore();
+  }
+}
+
+// ——— host messages ————————————————————————————————————————————————————————————————————————————————————————
+// When embedded in an iframe the engine talks to its host page with postMessage (see README, "Host API").
+// Out: { source: 'roomtone', type, version, song, ... }. In: { target: 'roomtone', type: 'play' | 'pause' | 'song' | 'state', key }.
+// The older plain strings 'roomtone:playing' (out) and 'roomtone:pause' (in) still work.
+
+const host = {
+  embedded: parent !== window,
+  tell(type, app, extra = {}) {
+    if (!this.embedded) return;
+    const s = app?.key && SONGS[app.key], m = app?.room?.mixer;
+    if (type === 'playing') parent.postMessage('roomtone:playing', '*');
+    parent.postMessage({ source: 'roomtone', type, version: ENGINE_VERSION,
+      song: s ? { key: app.key, track: s.track, title: s.title } : null,
+      playing: audioContext().state === 'running',
+      position: m ? Math.round(m.position * 10) / 10 : 0, duration: m ? Math.round(m.duration * 10) / 10 : 0, ...extra }, '*');
+  },
+  listen(app) {
+    addEventListener('message', e => {
+      let d = e.data; const ctx = audioContext();
+      if (d === 'roomtone:pause') d = { target: 'roomtone', type: 'pause' };
+      if (!d || d.target !== 'roomtone') return;
+      if (d.type === 'pause' && ctx.state === 'running') ctx.suspend();
+      else if (d.type === 'play' && app.entered) ctx.resume();   // before the listener's first tap the browser won't allow sound
+      else if (d.type === 'song' && SONGS[d.key]) { if (app.lobby.isOpen) app.lobby.close(); app.go(d.key); }
+      else if (d.type === 'state') this.tell('state', app);
+    });
+  },
+};
+
+// ——— app: song switching, title card, transport, tracklist ————————————————————————————————————————————————
+
+const PLAY_ICON = 'M3 1.5v11l9.5-5.5z', PAUSE_ICON = 'M3 2h3v10H3zM8 2h3v10H8z';
+
+class App {
+  view = { W: 0, H: 0, DPR: 1 };
+  room = null;
+  key = null;
+  entered = false;   // the listener has come into a room at least once
+  visible = true;
+
+  constructor() {
+    new ResizeObserver(() => this.resize()).observe(ui.c);
+    new IntersectionObserver(([e]) => { this.visible = e.isIntersecting; }).observe(ui.stage);
+    document.fonts?.ready.then(() => this.room?.drawable && this.room.resize());
+    audioContext().addEventListener('statechange', () => {
+      this.showPlayState();
+      host.tell(audioContext().state === 'running' ? 'playing' : 'paused', this);
+    });
+    host.listen(this);
+    this.buildTracklist();
+    this.bindControls();
+    this.lobby = new Lobby(this);
+    // a song link opens its room; the bare page opens the way-in screen
+    addEventListener('popstate', () => { const k = this.keyFromHash(); k ? (this.show(k), this.lobby.isOpen && this.lobby.close()) : this.lobby.open(); });
+    addEventListener('hashchange', () => { const k = this.keyFromHash(); if (k) this.show(k); });
+    const asked = params.get('song'), first = this.keyFromHash() ?? (SONGS[asked] ? asked : null);
+    if (first) this.show(first);
+    else this.lobby.open();
+    this.showPlayState();
+    requestAnimationFrame(t => this.loop(t));
+  }
+
+  keyFromHash() { const k = location.hash.slice(1); return SONGS[k] ? k : null; }
+
+  go(key) {
+    if (key === this.key) return;
+    history.pushState(null, '', `#${key}`);
+    this.show(key);
+    if (matchMedia('(orientation:portrait) and (max-width:1024px)').matches) scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  // Swaps rooms: tears down the old one, shows the title card, loads the new one.
+  async show(key) {
+    if (key === this.key) return;
+    const song = SONGS[key], Kind = ROOMS[song.mode] ?? FigureRoom;
+    this.key = key;
+    this.room?.destroy();
+    this.loading?.abort();
+    const loading = this.loading = new AbortController(), room = this.room = new Kind(song, this);
+    this.whisperLine = 0;
+    this.scrubbing = false;
+    this.clockText = '';
+    ui.whisper.classList.remove('on');
+    ui.stems.replaceChildren();
+    ui.how.innerHTML = Kind.how.map(line => `<div>${line}</div>`).join('');
+    ui.c.setAttribute('aria-label', Kind.label);
+    this.describe(song);
+    this.showCard(song);
+    host.tell('song', this);
+    try {
+      await room.open(loading.signal, p => this.progress(p));
+    } catch (err) {
+      if (loading.signal.aborted) return;
+      console.error(err);
+      host.tell('error', this, { message: String(err.message ?? err) });
+      this.failCard();
+      return;
+    }
+    if (room !== this.room) return;
+    host.tell('loaded', this);
+    ui.loadBar.style.width = '100%';
+    const enter = () => room.start().then(() => room.wakeAll());
+    if (this.entered) enter();
+    else Object.assign(ui.enterBtn, { hidden: false, disabled: false, textContent: 'Enter the room', onclick: enter });
+  }
+
+  describe(song) {
+    const i = ORDER.indexOf(this.key), prev = SONGS[ORDER[i - 1]], next = SONGS[ORDER[i + 1]];
+    document.title = `${song.title} · ${ALBUM.title}`;
+    ui.eyebrow.textContent = ui.cardNum.textContent = `${ALBUM.title} · track ${song.track}`;
+    ui.songTitle.textContent = ui.cardTitle.textContent = ui.pkTitle.textContent = song.title;
+    ui.pkNum.textContent = pad2(song.track);
+    ui.blurb.textContent = song.blurb;
+    ui.clock.textContent = `0:00 / ${song.dur}`;
+    ui.scrub.value = 0;
+    ui.prevSong.disabled = !prev;
+    ui.nextSong.disabled = !next;
+    ui.prevSong.setAttribute('aria-label', prev ? `Previous: ${prev.title}` : 'Previous song');
+    ui.nextSong.setAttribute('aria-label', next ? `Next: ${next.title}` : 'Next song');
+    for (const b of ui.tlList.querySelectorAll('button')) {
+      const on = b.dataset.song === this.key, n = b.querySelector('.n');
+      b.setAttribute('aria-current', on);
+      if (on) n.innerHTML = '<span class="eq" aria-hidden="true"><i></i><i></i><i></i></span>';
+      else n.textContent = pad2(SONGS[b.dataset.song].track);
+    }
+  }
+
+  // ——— title card
+  showCard() {
+    ui.enter.hidden = false;
+    ui.enter.classList.remove('gone');
+    ui.loadBar.style.width = '0%';
+    Object.assign(ui.enterBtn, { hidden: this.entered, disabled: true, textContent: 'Loading the room…', onclick: null });
+    ui.enterNote.textContent = this.entered ? '' : 'sound on';
+  }
+  progress(p) {
+    const pct = Math.round(p * 100);
+    ui.loadBar.style.width = `${pct}%`;
+    if (!this.entered) ui.enterBtn.textContent = `Loading the room… ${pct}%`;
+  }
+  failCard() {
+    const key = this.key;
+    Object.assign(ui.enterBtn, { hidden: false, disabled: false, textContent: 'The room didn’t load. Try again', onclick: () => { this.key = null; this.show(key); } });
+    ui.enterNote.textContent = 'or pick another song';
+  }
+  started() {
+    const room = this.room;
+    this.entered = true;
+    ui.enter.classList.add('gone');
+    setTimeout(() => { if (room === this.room && ui.enter.classList.contains('gone')) ui.enter.hidden = true; }, 750);
+    this.showPlayState();
+  }
+
+  whisper(on) {
+    if (on) { const lines = SONGS[this.key].stare; ui.whisper.textContent = lines[this.whisperLine++ % lines.length]; }
+    ui.whisper.classList.toggle('on', on);
+  }
+
+  // ——— drawing
+  resize() {
+    const r = ui.c.getBoundingClientRect(), DPR = Math.min(2, devicePixelRatio || 1);
+    Object.assign(this.view, { W: r.width, H: r.height, DPR });
+    ui.c.width = Math.round(r.width * DPR);
+    ui.c.height = Math.round(r.height * DPR);
+    if (this.room?.drawable) this.room.resize();
+  }
+  loop(t) {
+    requestAnimationFrame(t => this.loop(t));
+    const { room } = this;
+    if (room?.mixer) this.showTime(room.mixer);   // even when the room is scrolled out of view
+    if (!room?.drawable || !this.view.W || !this.visible) return;
+    room.frame(t);
+  }
+  showTime(mixer) {
+    const pos = this.scrubbing ? ui.scrub.value / 1000 * mixer.duration : mixer.position;
+    const text = `${mmss(pos)} / ${mmss(mixer.duration)}`;
+    if (text !== this.clockText) ui.clock.textContent = this.clockText = text;
+    if (!this.scrubbing) ui.scrub.value = Math.round(pos / mixer.duration * 1000);
+  }
+
+  // ——— controls
+  togglePlay() {
+    if (!this.entered) { if (!ui.enterBtn.disabled && !ui.enterBtn.hidden) ui.enterBtn.click(); return; }
+    const ctx = audioContext();
+    ctx.state === 'running' ? ctx.suspend() : ctx.resume();
+  }
+  showPlayState() {
+    const playing = this.entered && audioContext().state === 'running';
+    ui.playIcon.setAttribute('d', playing ? PAUSE_ICON : PLAY_ICON);
+    ui.playBtn.setAttribute('aria-label', playing ? 'Pause' : 'Play');
+    document.body.classList.toggle('paused', !playing);
+  }
+  step(by) { const k = ORDER[ORDER.indexOf(this.key) + by]; if (k) this.go(k); }
+
+  bindControls() {
+    // these act on the room's sound, starting it first if need be
+    const withSound = fn => async () => { const r = this.room; if (!r?.buffers) return; await r.begin(); fn(r, r.mixer); };
+    ui.wakeAll.onclick = withSound(r => r.wakeAll());
+    ui.sleepAll.onclick = () => this.room?.drawable && this.room.sleepAll();
+    ui.restart.onclick = () => this.room?.mixer?.seek(0);
+    const seek = (m, s) => m.seek(clamp(s, 0, m.duration - .5));   // controls stop at the song's ends
+    ui.back10.onclick = withSound((r, m) => seek(m, m.position - 10));
+    ui.fwd10.onclick = withSound((r, m) => seek(m, m.position + 10));
+    ui.scrub.oninput = () => { this.scrubbing = true; };
+    ui.scrub.onchange = withSound((r, m) => { seek(m, ui.scrub.value / 1000 * m.duration); this.scrubbing = false; });
+    ui.playBtn.onclick = () => this.togglePlay();
+    ui.prevSong.onclick = () => this.step(-1);
+    ui.nextSong.onclick = () => this.step(1);
+    // space plays and pauses, [ and ] change song, Escape closes the tracklist
+    addEventListener('keydown', e => {
+      if (e.metaKey || e.ctrlKey || e.altKey) return;
+      if (this.lobby.isOpen) { if (e.key === 'Escape' && this.room) this.lobby.close(); return; }
+      if (e.key === 'Escape') return this.closeList();
+      if (e.key === 'Tab' && this.listOpen) {   // keep keyboard focus inside the open tracklist
+        const stops = [...ui.tracklist.querySelectorAll('button')].filter(b => b.offsetParent), i = stops.indexOf(document.activeElement);
+        e.preventDefault();
+        stops.at((i + (e.shiftKey ? -1 : 1)) % stops.length).focus();
+        return;
+      }
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.key === ' ' && tag !== 'BUTTON') { e.preventDefault(); this.togglePlay(); }
+      else if (e.key === ']') this.step(1);
+      else if (e.key === '[') this.step(-1);
+    });
+  }
+
+  // ——— tracklist
+  buildTracklist() {
+    ui.tlList.replaceChildren(...ORDER.map(key => {
+      const song = SONGS[key], li = document.createElement('li'), b = document.createElement('button');
+      b.dataset.song = key;
+      b.innerHTML = '<span class="th"></span><span class="n"></span><span class="t"><b></b><small></small></span><span class="d"></span>';
+      b.querySelector('b').textContent = song.title;
+      b.querySelector('small').textContent = song.blurb.split(/(?<=[.!?])\s/)[0];
+      b.querySelector('.d').textContent = song.dur;
+      b.onclick = () => { this.closeList(true); this.go(key); };
+      li.append(b);
+      return li;
+    }));
+    ui.pickBtn.onclick = () => this.listOpen ? this.closeList() : this.openList();
+    ui.scrim.onclick = ui.tlClose.onclick = () => this.closeList();
+    ui.howBtn.onclick = () => { this.closeList(true); this.lobby.open(); };
+    addEventListener('pointerdown', e => {
+      if (this.listOpen && !ui.tracklist.contains(e.target) && !ui.pickBtn.contains(e.target) && e.target !== ui.scrim) this.closeList(true);
+    });
+    // swipe the sheet down to close it
+    let startY = null;
+    ui.tracklist.addEventListener('touchstart', e => { startY = ui.tracklist.scrollTop <= 0 ? e.touches[0].clientY : null; }, { passive: true });
+    ui.tracklist.addEventListener('touchmove', e => { if (startY !== null && e.touches[0].clientY - startY > 70) { startY = null; this.closeList(true); } }, { passive: true });
+  }
+  openList() {
+    if (!this.thumbs) {   // the pictures load the first time the list opens
+      this.thumbs = true;
+      for (const b of ui.tlList.querySelectorAll('button')) b.querySelector('.th').style.backgroundImage = `url("${SONGS[b.dataset.song].thumb}")`;
+    }
+    this.setListOpen(true);
+    const current = ui.tlList.querySelector('[aria-current="true"]');
+    current.scrollIntoView({ block: 'nearest' });
+    setTimeout(() => current.focus({ preventScroll: true }), 30);
+  }
+  closeList(quietly = false) {
+    if (!this.listOpen) return;
+    this.setListOpen(false);
+    if (!quietly) ui.pickBtn.focus();
+  }
+  setListOpen(open) {
+    this.listOpen = open;
+    ui.tracklist.classList.toggle('open', open);
+    ui.scrim.classList.toggle('open', open);
+    ui.tracklist.inert = !open;
+    ui.tracklist.setAttribute('aria-hidden', !open);
+    ui.pickBtn.setAttribute('aria-expanded', open);
+  }
+}
+
+// ——— boot ———————————————————————————————————————————————————————————————————————————————————————————————————
+
+function showAlbumText() {
+  document.title = ALBUM.title;
+  ui.lbTitle.textContent = ui.tlAlbum.textContent = ALBUM.title;
+  ui.lbArtist.textContent = ui.tlArtist.textContent = ui.byArtist.textContent = ALBUM.artist ?? '';
+  ui.lbLede.textContent = ALBUM.lede ?? '';
+  ui.lobby.setAttribute('aria-label', `${ALBUM.title}: the way in`);
+}
+
+try {
+  await loadAlbum();
+  showAlbumText();
+  const app = new App();
+  host.tell('ready', app, { album: { title: ALBUM.title, artist: ALBUM.artist,
+    songs: ORDER.map(k => ({ key: k, track: SONGS[k].track, title: SONGS[k].title, dur: SONGS[k].dur })) } });
+} catch (err) {
+  console.error(err);
+  document.body.innerHTML = '<p style="margin:20vh auto;text-align:center;font:italic 20px var(--display)">The rooms couldn’t open.</p>';
+  host.tell('error', null, { message: String(err.message ?? err) });
+}
+</script>
